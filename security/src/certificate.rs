@@ -1,6 +1,6 @@
 //! 証明書管理
 
-use crate::KvmResult;
+use soft_kvm_core::KvmResult;
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, Certificate};
 use rustls::{Certificate as RustlsCertificate, PrivateKey as RustlsPrivateKey};
 use std::collections::HashMap;
@@ -69,7 +69,7 @@ impl CertificateManager {
 
         info!("Generating self-signed {} certificate", key_name);
 
-        let key_pair = KeyPair::generate()?;
+        let key_pair = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let mut params = CertificateParams::default();
 
         // 識別名設定
@@ -114,7 +114,7 @@ impl CertificateManager {
         }
 
         // 証明書生成
-        let cert = params.self_signed(&key_pair)?;
+        let cert = params.self_sign(&key_pair)?;
 
         // Rustls形式に変換
         let rustls_cert = RustlsCertificate(cert.pem().as_bytes().to_vec());

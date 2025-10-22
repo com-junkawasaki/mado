@@ -11,14 +11,8 @@ tauri-build.workspace = true
 
 [dependencies]
 serde_json.workspace = true
-serde.workspace = true
 tauri.workspace = true
-
-# Soft KVM modules
-soft-kvm-core = { path = "../core" }
-soft-kvm-discovery = { path = "../discovery" }
-soft-kvm-protocol = { path = "../protocol" }
-soft-kvm-monitoring = { path = "../monitoring" }
+tokio.workspace = true
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

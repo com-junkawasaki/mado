@@ -1,6 +1,6 @@
 //! TLS 1.3 実装
 
-use crate::KvmResult;
+use soft_kvm_core::KvmResult;
 use rustls::{ClientConfig, ServerConfig, RootCertStore, Certificate, PrivateKey};
 use tokio_rustls::{TlsConnector, TlsAcceptor, client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream};
 use std::sync::Arc;
@@ -112,8 +112,8 @@ impl TlsConnection {
                 let server_name = rustls::ServerName::try_from(server_name)
                     .map_err(|e| soft_kvm_core::KvmError::Security(format!("Invalid server name: {}", e)))?;
 
-                let tls_stream = connector.connect(server_name, stream).await?;
-                info!("TLS connection established to {}", server_name);
+                let tls_stream = connector.connect(server_name.clone(), stream).await?;
+                info!("TLS connection established to {:?}", server_name);
                 Ok(SecureStream::Client(tls_stream))
             }
             TlsConnection::Server(_) => {
@@ -124,6 +124,7 @@ impl TlsConnection {
 }
 
 /// セキュリティ保護されたストリーム
+#[derive(Debug)]
 pub enum SecureStream {
     Server(ServerTlsStream<TcpStream>),
     Client(ClientTlsStream<TcpStream>),
@@ -166,7 +167,7 @@ impl SecureStream {
 
     /// 暗号スイートを取得
     pub fn cipher_suite(&self) -> Option<rustls::CipherSuite> {
-        self.session_info()?.cipher_suite()
+        self.session_info()?.negotiated_cipher_suite()
     }
 }
 

@@ -1,6 +1,6 @@
 //! TLSハンドシェイク処理
 
-use crate::{TlsConnection, SecureStream, CertificateManager, LanCertificateStore, CertificateType};
+use crate::{TlsConnection, SecureStream, CertificateManager, LanCertificateStore};
 use soft_kvm_core::{NetworkAddress, KvmResult, ServiceId};
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
