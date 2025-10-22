@@ -1,0 +1,39 @@
+[package]
+name = "soft-kvm-video"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "低遅延ビデオキャプチャと圧縮"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+soft-kvm-protocol = { path = "../protocol" }
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# Video processing
+openh264 = "0.3"
+
+# Image processing
+image = "0.24"
+
+# Async utilities
+futures.workspace = true
+
+# Performance monitoring
+metrics.workspace = true
+
+# Platform-specific video capture
+[target.'cfg(target_os = "linux")'.dependencies]
+wayland-client = "0.31"
+x11rb = "0.13"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
+core-graphics = "0.23"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
