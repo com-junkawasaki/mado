@@ -27,7 +27,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // Import plugins
-use soft_kvm_plugin_video::init as video_plugin_init;
 use soft_kvm_plugin_input::init as input_plugin_init;
 use soft_kvm_plugin_service::init as service_plugin_init;
 use soft_kvm_plugin_security::init as security_plugin_init;
@@ -159,7 +158,6 @@ fn main() {
     tauri::Builder::default()
         .manage(Arc::new(RwLock::new(AppState::default())))
         // Register plugins
-        .plugin(video_plugin_init())
         .plugin(input_plugin_init())
         .plugin(service_plugin_init())
         .plugin(security_plugin_init())

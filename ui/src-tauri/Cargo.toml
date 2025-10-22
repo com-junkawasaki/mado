@@ -15,7 +15,6 @@ serde_json.workspace = true
 tokio.workspace = true
 
 # Soft KVM plugins
-soft-kvm-plugin-video = { path = "../../plugins/plugin-video" }
 soft-kvm-plugin-input = { path = "../../plugins/plugin-input" }
 soft-kvm-plugin-service = { path = "../../plugins/plugin-service" }
 soft-kvm-plugin-security = { path = "../../plugins/plugin-security" }

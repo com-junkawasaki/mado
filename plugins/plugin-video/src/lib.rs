@@ -23,6 +23,7 @@ use tokio::sync::RwLock;
 
 mod capture;
 mod platform;
+mod encoder;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VideoConfig {
