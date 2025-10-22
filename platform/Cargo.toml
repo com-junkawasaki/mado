@@ -12,6 +12,8 @@ tokio.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+libc.workspace = true
+directories.workspace = true
 
 # Linux specific
 [target.'cfg(target_os = "linux")'.dependencies]

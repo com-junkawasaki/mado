@@ -13,9 +13,9 @@ serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
-# mDNS implementation
-mdns = "3.0"
-dns-parser = "0.8"
+# mDNS implementation (simplified for now)
+# mdns = "3.0"
+# dns-parser = "0.8"
 
 # Network utilities
 socket2.workspace = true

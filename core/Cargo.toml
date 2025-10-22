@@ -8,6 +8,7 @@ description = "Soft KVM 共通型定義とユーティリティ"
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

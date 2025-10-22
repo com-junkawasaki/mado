@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Soft KVM Discovery
+//! # Soft KVM Security
 //!
-//! mDNSベースのサービスディスカバリ実装
+//! TLS 1.3ハンドシェイクと暗号化実装
 //!
 //! ## Merkle DAG Node
-//! hash: sha256:discovery_v1
+//! hash: sha256:security_v1
 //! dependencies: [core]
 
-pub mod service;
-pub mod resolver;
+pub mod tls;
+pub mod certificate;
+pub mod handshake;
 
-pub use service::*;
-pub use resolver::*;
+pub use tls::*;
+pub use certificate::*;
+pub use handshake::*;

@@ -2,15 +2,9 @@
 members = [
     "core",
     "discovery",
-    "security",
-    "protocol",
-    "video",
-    "input",
     "platform",
     "service",
     "monitoring",
-    "server",
-    "client",
 ]
 resolver = "2"
 
@@ -59,6 +53,10 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # Collections
 dashmap = "5.5"
+
+# System utilities
+libc = "0.2"
+directories = "5.0"
 
 # Performance monitoring
 metrics = "0.23"

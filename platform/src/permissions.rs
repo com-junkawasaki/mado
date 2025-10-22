@@ -113,7 +113,8 @@ impl PermissionManager {
 
     #[cfg(target_os = "macos")]
     async fn request_screen_capture(&self) -> KvmResult<PermissionStatus> {
-        crate::macos::request_screen_capture_permission().await
+        // TODO: macOS実装
+        Ok(PermissionStatus::NotApplicable)
     }
 
     #[cfg(target_os = "windows")]

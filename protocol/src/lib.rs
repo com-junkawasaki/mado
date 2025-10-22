@@ -9,28 +9,33 @@
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
+// See the License for the governing permissions and
 // limitations under the License.
 
-//! # Soft KVM Platform
+//! # Soft KVM Protocol
 //!
-//! OS別バックエンド統合実装
+//! KVM共有プロトコル実装
 //!
 //! ## Merkle DAG Node
-//! hash: sha256:platform_v1
-//! dependencies: [core]
+//! hash: sha256:protocol_v1
+//! dependencies: [core, security]
 
-pub mod capture;
+pub mod messages;
+pub mod transport;
+pub mod session;
+pub mod video;
 pub mod input;
-pub mod permissions;
+pub mod control;
 
-#[cfg(target_os = "linux")]
-pub mod linux;
-#[cfg(target_os = "macos")]
-pub mod macos;
-#[cfg(target_os = "windows")]
-pub mod windows;
-
-pub use capture::*;
+pub use messages::*;
+pub use transport::*;
+pub use session::*;
+pub use video::*;
 pub use input::*;
-pub use permissions::*;
+pub use control::*;
+
+// Protocol constants
+pub const PROTOCOL_VERSION: &str = "1.0.0";
+pub const MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64MB
+pub const HEARTBEAT_INTERVAL_MS: u64 = 1000;
+pub const CONNECTION_TIMEOUT_MS: u64 = 5000;

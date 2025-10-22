@@ -1,0 +1,21 @@
+[package]
+name = "soft-kvm-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "KVMサーバー実装"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+soft-kvm-discovery = { path = "../discovery" }
+soft-kvm-security = { path = "../security" }
+soft-kvm-platform = { path = "../platform" }
+soft-kvm-service = { path = "../service" }
+soft-kvm-monitoring = { path = "../monitoring" }
+soft-kvm-protocol = { path = "../protocol" }
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+clap = { version = "4.0", features = ["derive"] }

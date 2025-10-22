@@ -10,6 +10,7 @@ description = "システムサービス統合"
 soft-kvm-core = { path = "../core" }
 tokio.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

@@ -20,6 +20,10 @@ tokio-rustls = "0.24"
 # Certificate handling
 rcgen = "0.11"
 webpki = "0.22"
+x509-parser = "0.15"
 
 # Cryptography utilities
 ring.workspace = true
+
+# Utilities
+hex = "0.4"

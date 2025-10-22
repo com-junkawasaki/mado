@@ -1,6 +1,6 @@
 //! サービスディスカバリ基本構造
 
-use crate::KvmResult;
+use soft_kvm_core::KvmResult;
 use soft_kvm_core::{ServiceId, NetworkAddress, Resolution, VideoQuality};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
