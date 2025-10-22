@@ -1,6 +1,7 @@
 //! TLSハンドシェイク処理
 
-use crate::{TlsConnection, SecureStream, CertificateManager, LanCertificateStore};
+use crate::tls::{TlsConnection, SecureStream};
+use crate::certificate::{CertificateManager, LanCertificateStore, CertificateConfig};
 use soft_kvm_core::{NetworkAddress, KvmResult, ServiceId};
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
@@ -56,7 +57,7 @@ pub struct HandshakeManager {
 }
 
 impl HandshakeManager {
-    pub fn new(config: HandshakeConfig, cert_config: crate::CertificateConfig) -> Self {
+    pub fn new(config: HandshakeConfig, cert_config: CertificateConfig) -> Self {
         Self {
             config,
             cert_manager: CertificateManager::new(cert_config),
@@ -77,14 +78,14 @@ impl HandshakeManager {
 
         // TLS接続設定
         let (cert, key) = self.cert_manager.get_server_certificate()?;
-        let tls_config = crate::TlsConfig::server(vec![cert.clone()], key.clone())?;
+        let tls_config = crate::tls::TlsConfig::server(vec![cert.clone()], key.clone())?;
         let tls_connection = tls_config.build()?;
 
         // ハンドシェイク実行（タイムアウト付き）
         let handshake_future = tls_connection.accept(stream);
         let stream = timeout(Duration::from_secs(self.config.timeout_seconds), handshake_future)
             .await
-            .map_err(|_| soft_kvm_core::KvmError::Timeout("TLS handshake timeout".to_string()))??;
+            .map_err(|_| soft_kvm_core::KvmError::Security("TLS handshake timeout".to_string()))??;
 
         let handshake_time = start_time.elapsed().as_secs_f64() * 1000.0;
 
@@ -93,6 +94,10 @@ impl HandshakeManager {
 
         // 認証チェック
         self.verify_peer_authentication(&peer_info)?;
+
+        // ストリーム情報取得
+        let protocol_version = self.get_protocol_version(&stream);
+        let cipher_suite = self.get_cipher_suite(&stream);
 
         // 統計更新
         {
@@ -104,8 +109,8 @@ impl HandshakeManager {
             stream,
             peer_info,
             handshake_time_ms: handshake_time,
-            protocol_version: self.get_protocol_version(&stream),
-            cipher_suite: self.get_cipher_suite(&stream),
+            protocol_version,
+            cipher_suite,
         };
 
         info!("Server TLS handshake completed in {:.2}ms", handshake_time);
@@ -124,7 +129,7 @@ impl HandshakeManager {
         debug!("Starting client TLS handshake to {}", server_address.ip);
 
         // TLS接続設定
-        let tls_config = crate::TlsConfig::client(self.cert_store.to_root_store());
+        let tls_config = crate::tls::TlsConfig::client(self.cert_store.to_root_store());
         let tls_connection = tls_config.build()?;
 
         // サーバー名設定（LANホスト名）
@@ -134,7 +139,7 @@ impl HandshakeManager {
         let handshake_future = tls_connection.connect(stream, &server_name);
         let stream = timeout(Duration::from_secs(self.config.timeout_seconds), handshake_future)
             .await
-            .map_err(|_| soft_kvm_core::KvmError::Timeout("TLS handshake timeout".to_string()))??;
+            .map_err(|_| soft_kvm_core::KvmError::Security("TLS handshake timeout".to_string()))??;
 
         let handshake_time = start_time.elapsed().as_secs_f64() * 1000.0;
 
@@ -155,6 +160,10 @@ impl HandshakeManager {
             }
         }
 
+        // ストリーム情報取得
+        let protocol_version = self.get_protocol_version(&stream);
+        let cipher_suite = self.get_cipher_suite(&stream);
+
         // 統計更新
         {
             let mut stats = self.stats.lock().unwrap();
@@ -165,8 +174,8 @@ impl HandshakeManager {
             stream,
             peer_info,
             handshake_time_ms: handshake_time,
-            protocol_version: self.get_protocol_version(&stream),
-            cipher_suite: self.get_cipher_suite(&stream),
+            protocol_version,
+            cipher_suite,
         };
 
         info!("Client TLS handshake completed in {:.2}ms", handshake_time);
@@ -175,7 +184,11 @@ impl HandshakeManager {
 
     /// ピア情報を収集
     async fn collect_peer_info(&self, stream: &SecureStream, expected_id: Option<ServiceId>) -> KvmResult<PeerInfo> {
-        let address = NetworkAddress::new(stream.get_ref().peer_addr()?.ip(), 0);
+        let peer_addr = stream.get_ref().peer_addr()?;
+        let address = NetworkAddress {
+            ip: peer_addr.ip().to_string(),
+            port: 0,
+        };
 
         let certificate_fingerprint = stream.peer_certificates()
             .and_then(|certs| certs.first())
@@ -312,14 +325,14 @@ impl HandshakeStats {
 /// セキュア接続ビルダー
 pub struct SecureConnectionBuilder {
     handshake_config: HandshakeConfig,
-    cert_config: crate::CertificateConfig,
+    cert_config: CertificateConfig,
 }
 
 impl SecureConnectionBuilder {
     pub fn new() -> Self {
         Self {
             handshake_config: HandshakeConfig::default(),
-            cert_config: crate::CertificateConfig::default(),
+            cert_config: CertificateConfig::default(),
         }
     }
 
@@ -333,7 +346,7 @@ impl SecureConnectionBuilder {
         self
     }
 
-    pub fn with_certificate_config(mut self, config: crate::CertificateConfig) -> Self {
+    pub fn with_certificate_config(mut self, config: CertificateConfig) -> Self {
         self.cert_config = config;
         self
     }

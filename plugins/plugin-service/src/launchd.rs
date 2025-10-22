@@ -65,7 +65,7 @@ pub async fn start_service() -> KvmResult<()> {
 
     // plistファイルが存在するか確認
     if !plist_file_exists() {
-        create_plist_file().await?;
+        create_plist_file(None).await?;
         load_service().await?;
     }
 
@@ -150,11 +150,69 @@ fn plist_file_exists() -> bool {
 }
 
 /// launchd plistファイルを作成
-async fn create_plist_file() -> KvmResult<()> {
+async fn create_plist_file(config: Option<&crate::SimpleServiceConfig>) -> KvmResult<()> {
     info!("Creating launchd plist file...");
 
+    let plist_content = if let Some(config) = config {
+        // 設定に基づいてplistをカスタマイズ
+        format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.soft-kvm.server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/soft-kvm-server</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <{}/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/soft-kvm.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/soft-kvm.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+        <key>DISPLAY</key>
+        <string>:0</string>
+    </dict>
+
+    <key>UserName</key>
+    <string>root</string>
+
+    <key>GroupName</key>
+    <string>wheel</string>
+
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>1024</integer>
+    </dict>
+
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>2048</integer>
+    </dict>
+</dict>
+</plist>
+"#, if config.auto_start { "true" } else { "false" })
+    } else {
+        LAUNCHD_PLIST_TEMPLATE.to_string()
+    };
+
     // plistファイルを作成
-    tokio::fs::write("/Library/LaunchDaemons/com.soft-kvm.server.plist", LAUNCHD_PLIST_TEMPLATE)
+    tokio::fs::write("/Library/LaunchDaemons/com.soft-kvm.server.plist", plist_content)
         .await
         .map_err(|e| soft_kvm_core::KvmError::Platform(format!("Failed to create plist file: {}", e)))?;
 
@@ -197,11 +255,11 @@ async fn load_service() -> KvmResult<()> {
 }
 
 /// launchdサービスをインストール
-pub async fn install_service() -> KvmResult<()> {
+pub async fn install_service(config: Option<&crate::SimpleServiceConfig>) -> KvmResult<()> {
     info!("Installing launchd service...");
 
     // plistファイルを作成
-    create_plist_file().await?;
+    create_plist_file(config).await?;
 
     // サービスをロード
     load_service().await

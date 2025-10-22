@@ -28,7 +28,8 @@ impl TlsConfig {
     pub fn server(cert_chain: Vec<Certificate>, private_key: PrivateKey) -> KvmResult<Self> {
         let mut ca_store = RootCertStore::empty();
         // LAN専用なので自己署名証明書を使用可能にする
-        ca_store.add(&cert_chain[0])?;
+        ca_store.add(&cert_chain[0])
+            .map_err(|e| soft_kvm_core::KvmError::Security(format!("Failed to add CA certificate: {}", e)))?;
 
         Ok(Self {
             connection_type: TlsConnectionType::Server,
@@ -60,7 +61,8 @@ impl TlsConfig {
                 let mut config = ServerConfig::builder()
                     .with_safe_defaults()
                     .with_no_client_auth()
-                    .with_single_cert(self.cert_chain.clone(), private_key.clone())?;
+                    .with_single_cert(self.cert_chain.clone(), private_key.clone())
+                    .map_err(|e| soft_kvm_core::KvmError::Security(format!("Failed to create server config: {}", e)))?;
 
                 config.alpn_protocols = self.alpn_protocols.clone();
 
@@ -147,27 +149,28 @@ impl SecureStream {
         }
     }
 
-    /// TLSセッション情報を取得
-    pub fn session_info(&self) -> Option<&rustls::Connection> {
-        match self {
-            SecureStream::Server(s) => Some(s.get_ref().1),
-            SecureStream::Client(c) => Some(c.get_ref().1),
-        }
-    }
-
     /// ピア証明書を取得
     pub fn peer_certificates(&self) -> Option<&[Certificate]> {
-        self.session_info()?.peer_certificates()
+        match self {
+            SecureStream::Server(s) => s.get_ref().1.peer_certificates(),
+            SecureStream::Client(c) => c.get_ref().1.peer_certificates(),
+        }
     }
 
     /// プロトコルバージョンを取得
     pub fn protocol_version(&self) -> Option<rustls::ProtocolVersion> {
-        self.session_info()?.protocol_version()
+        match self {
+            SecureStream::Server(s) => s.get_ref().1.protocol_version(),
+            SecureStream::Client(c) => c.get_ref().1.protocol_version(),
+        }
     }
 
     /// 暗号スイートを取得
-    pub fn cipher_suite(&self) -> Option<rustls::CipherSuite> {
-        self.session_info()?.negotiated_cipher_suite()
+    pub fn cipher_suite(&self) -> Option<rustls::SupportedCipherSuite> {
+        match self {
+            SecureStream::Server(s) => s.get_ref().1.negotiated_cipher_suite(),
+            SecureStream::Client(c) => c.get_ref().1.negotiated_cipher_suite(),
+        }
     }
 }
 

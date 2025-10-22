@@ -53,7 +53,7 @@ pub async fn start_service() -> KvmResult<()> {
 
     // サービスファイルが存在するか確認
     if !service_file_exists() {
-        create_service_file().await?;
+        create_service_file(None).await?;
         reload_daemon().await?;
     }
 
@@ -137,11 +137,57 @@ fn service_file_exists() -> bool {
 }
 
 /// systemd サービスファイルを作成
-async fn create_service_file() -> KvmResult<()> {
+async fn create_service_file(config: Option<&crate::SimpleServiceConfig>) -> KvmResult<()> {
     info!("Creating systemd service file...");
 
+    let service_content = if let Some(config) = config {
+        // 設定に基づいてテンプレートをカスタマイズ
+        format!(r#"[Unit]
+Description={}
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=soft-kvm
+Group=soft-kvm
+ExecStart=/usr/local/bin/soft-kvm-server
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=soft-kvm
+
+# セキュリティ設定
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/soft-kvm /var/log/soft-kvm
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# 機能制限
+MemoryLimit=256M
+CPUQuota=50%
+BlockIOWeight=10
+
+# Wayland/X11 アクセス
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/soft-kvm/.Xauthority
+Environment=WAYLAND_DISPLAY=wayland-0
+
+[Install]
+WantedBy=multi-user.target
+"#, config.description)
+    } else {
+        SYSTEMD_SERVICE_TEMPLATE.to_string()
+    };
+
     // サービスファイルを作成
-    tokio::fs::write("/etc/systemd/system/soft-kvm.service", SYSTEMD_SERVICE_TEMPLATE)
+    tokio::fs::write("/etc/systemd/system/soft-kvm.service", service_content)
         .await
         .map_err(|e| soft_kvm_core::KvmError::Platform(format!("Failed to create service file: {}", e)))?;
 
@@ -177,17 +223,21 @@ async fn reload_daemon() -> KvmResult<()> {
 }
 
 /// サービスファイルをインストール
-pub async fn install_service() -> KvmResult<()> {
+pub async fn install_service(config: Option<&crate::SimpleServiceConfig>) -> KvmResult<()> {
     info!("Installing systemd service...");
 
     // サービスファイルを作成
-    create_service_file().await?;
+    create_service_file(config).await?;
 
     // daemonをリロード
     reload_daemon().await?;
 
-    // サービスを有効化
-    enable_service().await
+    // 自動起動設定に応じて有効化
+    if config.map(|c| c.auto_start).unwrap_or(false) {
+        enable_service().await?;
+    }
+
+    Ok(())
 }
 
 /// サービスファイルをアンインストール

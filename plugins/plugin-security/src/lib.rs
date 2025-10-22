@@ -20,10 +20,15 @@ use tauri::{plugin::Builder, plugin::TauriPlugin, Runtime, Manager};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use rcgen::{Certificate, CertificateParams, KeyPair, DistinguishedName, DnType};
 use chrono::{Utc, Duration};
 use ring::digest;
 use hex;
+
+// Import modules
+mod certificate;
+mod tls;
+mod handshake;
+mod config;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TlsConfig {
@@ -41,22 +46,27 @@ pub struct CertificateInfo {
     pub fingerprint: String,
 }
 
-/// Generate a self-signed certificate (mock implementation)
+/// Generate a self-signed certificate using rcgen
 fn generate_self_signed_certificate(
     common_name: &str,
-    _organization: Option<&str>,
-    _validity_days: u32,
+    organization: Option<&str>,
+    validity_days: u32,
 ) -> Result<(Vec<u8>, Vec<u8>), String> {
-    // Mock certificate generation - replace with actual rcgen implementation later
-    let mock_cert = format!("-----BEGIN CERTIFICATE-----\n\
-MOCK_CERTIFICATE_FOR_{}\n\
------END CERTIFICATE-----\n", common_name);
+    let mut cert_manager = certificate::CertificateManager::new(certificate::CertificateConfig {
+        common_name: common_name.to_string(),
+        organization: organization.unwrap_or("Soft KVM Team").to_string(),
+        organizational_unit: Some("Development".to_string()),
+        country: "JP".to_string(),
+        state: "Tokyo".to_string(),
+        locality: "Tokyo".to_string(),
+        validity_days: validity_days as i64,
+        key_size: 2048,
+    });
 
-    let mock_key = "-----BEGIN PRIVATE KEY-----\n\
-MOCK_PRIVATE_KEY\n\
------END PRIVATE KEY-----\n".to_string();
+    let (cert, key) = cert_manager.get_server_certificate()
+        .map_err(|e| format!("Failed to generate certificate: {}", e))?;
 
-    Ok((mock_cert.as_bytes().to_vec(), mock_key.as_bytes().to_vec()))
+    Ok((cert.0.clone(), key.0.clone()))
 }
 
 /// Calculate certificate fingerprint
@@ -135,12 +145,28 @@ async fn generate_certificate(
     let mut security_state = state.write().await;
     security_state.certificates.push((cert_pem.clone(), key_pem));
 
+    // Get certificate info using certificate manager
+    let cert_config = certificate::CertificateConfig {
+        common_name: common_name.clone(),
+        organization: "Soft KVM Team".to_string(),
+        organizational_unit: Some("Development".to_string()),
+        country: "JP".to_string(),
+        state: "Tokyo".to_string(),
+        locality: "Tokyo".to_string(),
+        validity_days: 365,
+        key_size: 2048,
+    };
+
+    let mut cert_manager = certificate::CertificateManager::new(cert_config);
+    let cert_info = cert_manager.get_certificate_info()
+        .map_err(|e| format!("Failed to get certificate info: {}", e))?;
+
     Ok(CertificateInfo {
-        subject: common_name.clone(),
-        issuer: common_name.clone(),
-        valid_from: Utc::now().format("%Y-%m-%d").to_string(),
-        valid_until: (Utc::now() + Duration::days(365)).format("%Y-%m-%d").to_string(),
-        fingerprint: fingerprint.chars()
+        subject: cert_info.subject,
+        issuer: cert_info.issuer,
+        valid_from: cert_info.not_before.format("%Y-%m-%d").to_string(),
+        valid_until: cert_info.not_after.format("%Y-%m-%d").to_string(),
+        fingerprint: cert_info.fingerprint_sha256.chars()
             .collect::<Vec<char>>()
             .chunks(2)
             .map(|chunk| chunk.iter().collect::<String>())

@@ -71,7 +71,7 @@ async fn install_service(
     // Platform-specific installation
     #[cfg(target_os = "linux")]
     {
-        match systemd::install_service().await {
+        match systemd::install_service(Some(&config)).await {
             Ok(_) => {
                 service_state.config = Some(config);
                 Ok("Systemd service installed successfully".to_string())
@@ -82,7 +82,7 @@ async fn install_service(
 
     #[cfg(target_os = "macos")]
     {
-        match launchd::install_service().await {
+        match launchd::install_service(Some(&config)).await {
             Ok(_) => {
                 service_state.config = Some(config);
                 Ok("Launchd service installed successfully".to_string())

@@ -45,6 +45,13 @@ pub struct MouseEvent {
 pub struct InputConfig {
     pub keyboard_enabled: bool,
     pub mouse_enabled: bool,
+    pub toggle_hotkey: Option<HotkeyConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HotkeyConfig {
+    pub modifiers: Vec<String>,
+    pub key: String,
 }
 
 #[derive(Debug)]
@@ -141,7 +148,7 @@ async fn stop_input_capture(state: tauri::State<'_, Arc<RwLock<InputCaptureState
 /// Send keyboard event to remote system
 #[tauri::command]
 async fn send_keyboard_event(
-    event: KeyboardEvent,
+    mut event: KeyboardEvent,
     state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
 ) -> Result<String, String> {
     let capture_state = state.read().await;
@@ -149,6 +156,14 @@ async fn send_keyboard_event(
     if !capture_state.is_capturing {
         return Err("Input capture is not running".to_string());
     }
+
+    // Validate event
+    if let Err(e) = injection::validate_keyboard_event(&event) {
+        return Err(format!("Invalid keyboard event: {}", e));
+    }
+
+    // Normalize key code (assuming "universal" platform for now)
+    event.key_code = capture::normalize_key_code(event.key_code, "universal");
 
     println!("Sending keyboard event: {:?}", event);
 
@@ -162,13 +177,23 @@ async fn send_keyboard_event(
 /// Send mouse event to remote system
 #[tauri::command]
 async fn send_mouse_event(
-    event: MouseEvent,
+    mut event: MouseEvent,
     state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
 ) -> Result<String, String> {
     let capture_state = state.read().await;
 
     if !capture_state.is_capturing {
         return Err("Input capture is not running".to_string());
+    }
+
+    // Validate event
+    if let Err(e) = injection::validate_mouse_event(&event) {
+        return Err(format!("Invalid mouse event: {}", e));
+    }
+
+    // Normalize mouse button if present
+    if let Some(button) = event.button {
+        event.button = Some(capture::normalize_mouse_button(button, "universal"));
     }
 
     println!("Sending mouse event: {:?}", event);
@@ -191,6 +216,81 @@ async fn get_input_status(state: tauri::State<'_, Arc<RwLock<InputCaptureState>>
     });
 
     Ok(status)
+}
+
+/// Toggle input capture using hotkey
+#[tauri::command]
+async fn toggle_input_capture(
+    hotkey: HotkeyConfig,
+    state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
+) -> Result<String, String> {
+    let mut capture_state = state.write().await;
+
+    // Validate hotkey
+    if hotkey.key.is_empty() {
+        return Err("Hotkey key cannot be empty".to_string());
+    }
+
+    println!("Toggle hotkey pressed: {:?}", hotkey);
+
+    if capture_state.is_capturing {
+        // Stop capture
+        if let Some(task) = capture_state.capture_task.take() {
+            task.abort();
+        }
+        capture_state.event_sender = None;
+        platform::cleanup_input_capture();
+        capture_state.is_capturing = false;
+        capture_state.config = None;
+
+        Ok("Input capture toggled OFF".to_string())
+    } else {
+        // Start capture with default config
+        let config = InputConfig {
+            keyboard_enabled: true,
+            mouse_enabled: true,
+            toggle_hotkey: Some(hotkey),
+        };
+
+        // Create event channel
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+        // Initialize platform-specific capture
+        match platform::initialize_input_capture(&config) {
+            Ok(_) => {
+                capture_state.is_capturing = true;
+                capture_state.config = Some(config.clone());
+                capture_state.event_sender = Some(tx.clone());
+
+                // Start capture task
+                let state_clone = Arc::clone(&state);
+                let task = tokio::spawn(async move {
+                    input_capture_loop(state_clone, rx, config).await;
+                });
+
+                capture_state.capture_task = Some(task);
+
+                Ok("Input capture toggled ON".to_string())
+            }
+            Err(e) => Err(format!("Failed to initialize input capture: {}", e)),
+        }
+    }
+}
+
+/// Set toggle hotkey
+#[tauri::command]
+async fn set_toggle_hotkey(
+    hotkey: Option<HotkeyConfig>,
+    state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
+) -> Result<String, String> {
+    let mut capture_state = state.write().await;
+
+    if let Some(ref mut config) = capture_state.config {
+        config.toggle_hotkey = hotkey.clone();
+    }
+
+    println!("Toggle hotkey set: {:?}", hotkey);
+    Ok("Toggle hotkey updated".to_string())
 }
 
 async fn input_capture_loop(
@@ -245,6 +345,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             send_keyboard_event,
             send_mouse_event,
             get_input_status,
+            toggle_input_capture,
+            set_toggle_hotkey,
         ])
         .setup(|_app| {
             // Initialize capture state

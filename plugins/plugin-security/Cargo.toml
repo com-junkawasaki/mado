@@ -27,6 +27,7 @@ ring = "0.17"
 # Utilities
 hex = "0.4"
 chrono.workspace = true
+time = "0.3"
 tracing.workspace = true
 
 # Internal crates
