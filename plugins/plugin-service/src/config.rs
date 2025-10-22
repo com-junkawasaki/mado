@@ -1,7 +1,7 @@
 //! サービス設定
 
 use serde::{Deserialize, Serialize};
-use soft_kvm_core::{NetworkAddress, Resolution, VideoQuality};
+use soft_kvm_core::{NetworkAddress, VideoResolution, VideoQuality};
 use std::path::PathBuf;
 
 /// サービス設定
@@ -77,7 +77,7 @@ impl Default for NetworkSettings {
 /// ビデオ設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoSettings {
-    pub resolution: Resolution,
+    pub resolution: VideoResolution,
     pub quality: VideoQuality,
     pub capture_cursor: bool,
     pub capture_rate: u32, // FPS
@@ -87,7 +87,7 @@ pub struct VideoSettings {
 impl Default for VideoSettings {
     fn default() -> Self {
         Self {
-            resolution: Resolution::fhd(),
+            resolution: VideoResolution::fhd(),
             quality: VideoQuality::balanced(),
             capture_cursor: true,
             capture_rate: 30,

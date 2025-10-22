@@ -46,6 +46,9 @@ pub enum KvmError {
     #[error("Discovery error: {0}")]
     Discovery(String),
 
+    #[error("Platform error: {0}")]
+    Platform(String),
+
     #[error("Configuration error: {0}")]
     Config(String),
 

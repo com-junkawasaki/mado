@@ -3,7 +3,7 @@
 use soft_kvm_core::KvmResult;
 use std::process::Command;
 use tokio::process::Command as TokioCommand;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// systemd サービスファイルテンプレート
 pub const SYSTEMD_SERVICE_TEMPLATE: &str = r#"[Unit]
@@ -173,6 +173,51 @@ async fn reload_daemon() -> KvmResult<()> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         error!("Failed to reload systemd daemon: {}", stderr);
         Err(soft_kvm_core::KvmError::Platform(format!("daemon-reload failed: {}", stderr)))
+    }
+}
+
+/// サービスファイルをインストール
+pub async fn install_service() -> KvmResult<()> {
+    info!("Installing systemd service...");
+
+    // サービスファイルを作成
+    create_service_file().await?;
+
+    // daemonをリロード
+    reload_daemon().await?;
+
+    // サービスを有効化
+    enable_service().await
+}
+
+/// サービスファイルをアンインストール
+pub async fn uninstall_service() -> KvmResult<()> {
+    info!("Uninstalling systemd service...");
+
+    // サービスを停止
+    if let Err(e) = stop_service().await {
+        warn!("Failed to stop service during uninstall: {:?}", e);
+    }
+
+    // サービスを無効化
+    if let Err(e) = disable_service().await {
+        warn!("Failed to disable service during uninstall: {:?}", e);
+    }
+
+    // サービスファイルを削除
+    match std::fs::remove_file("/etc/systemd/system/soft-kvm.service") {
+        Ok(_) => {
+            info!("systemd service file removed successfully");
+
+            // daemonをリロード
+            reload_daemon().await?;
+            info!("systemd service uninstalled successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to remove service file: {}", e);
+            Err(soft_kvm_core::KvmError::Platform(format!("Failed to remove service file: {}", e)))
+        }
     }
 }
 

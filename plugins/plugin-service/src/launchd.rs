@@ -3,7 +3,7 @@
 use soft_kvm_core::KvmResult;
 use std::process::Command;
 use tokio::process::Command as TokioCommand;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// launchd プロパティリストテンプレート
 pub const LAUNCHD_PLIST_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -193,6 +193,40 @@ async fn load_service() -> KvmResult<()> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         error!("Failed to load launchd service: {}", stderr);
         Err(soft_kvm_core::KvmError::Platform(format!("launchctl load failed: {}", stderr)))
+    }
+}
+
+/// launchdサービスをインストール
+pub async fn install_service() -> KvmResult<()> {
+    info!("Installing launchd service...");
+
+    // plistファイルを作成
+    create_plist_file().await?;
+
+    // サービスをロード
+    load_service().await
+}
+
+/// launchdサービスをアンインストール
+pub async fn uninstall_service() -> KvmResult<()> {
+    info!("Uninstalling launchd service...");
+
+    // サービスをアンロード
+    if let Err(e) = unload_service().await {
+        warn!("Failed to unload service during uninstall: {:?}", e);
+    }
+
+    // plistファイルを削除
+    match std::fs::remove_file("/Library/LaunchDaemons/com.soft-kvm.server.plist") {
+        Ok(_) => {
+            info!("launchd plist file removed successfully");
+            info!("launchd service uninstalled successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to remove plist file: {}", e);
+            Err(soft_kvm_core::KvmError::Platform(format!("Failed to remove plist file: {}", e)))
+        }
     }
 }
 

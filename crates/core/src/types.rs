@@ -28,12 +28,47 @@ pub struct NetworkAddress {
     pub port: u16,
 }
 
+impl NetworkAddress {
+    pub fn localhost(port: u16) -> Self {
+        NetworkAddress {
+            ip: "127.0.0.1".to_string(),
+            port,
+        }
+    }
+}
+
 /// Video quality settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoQuality {
     pub resolution: String,
     pub fps: u32,
     pub bitrate: u32,
+}
+
+impl VideoQuality {
+    pub fn balanced() -> Self {
+        VideoQuality {
+            resolution: "1920x1080".to_string(),
+            fps: 30,
+            bitrate: 5000, // 5 Mbps
+        }
+    }
+}
+
+/// Video resolution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct VideoResolution {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl VideoResolution {
+    pub fn fhd() -> Self {
+        VideoResolution {
+            width: 1920,
+            height: 1080,
+        }
+    }
 }
 
 /// Service resolution information
