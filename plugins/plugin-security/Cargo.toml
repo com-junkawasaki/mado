@@ -1,0 +1,12 @@
+[package]
+name = "soft-kvm-plugin-security"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Soft KVM Security Plugin"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
+tauri = { version = "1.6", features = ["shell-open"] }

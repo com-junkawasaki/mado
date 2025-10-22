@@ -1,0 +1,20 @@
+[package]
+name = "soft-kvm-discovery"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Soft KVM Service Discovery"
+
+[lib]
+name = "soft_kvm_discovery"
+path = "src/lib.rs"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+serde.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true

@@ -1,0 +1,58 @@
+[package]
+name = "soft-kvm-ui-tauri"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Soft KVM Tauri UI Application"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+tauri = { workspace = true, features = [
+  "dialog-ask",
+  "dialog-confirm",
+  "dialog-message",
+  "dialog-open",
+  "dialog-save",
+  "fs-copy-file",
+  "fs-create-dir",
+  "fs-exists",
+  "fs-read-dir",
+  "fs-read-file",
+  "fs-remove-dir",
+  "fs-remove-file",
+  "fs-rename-file",
+  "fs-write-file",
+  "http-request",
+  "process-exit",
+  "process-relaunch",
+  "protocol-asset",
+  "shell-open",
+  "window-close",
+  "window-hide",
+  "window-maximize",
+  "window-minimize",
+  "window-show",
+  "window-start-dragging",
+  "window-unmaximize",
+  "window-unminimize"
+] }
+tokio.workspace = true
+
+# Soft KVM plugins
+soft-kvm-plugin-video = { path = "../../plugins/plugin-video" }
+soft-kvm-plugin-input = { path = "../../plugins/plugin-input" }
+soft-kvm-plugin-service = { path = "../../plugins/plugin-service" }
+soft-kvm-plugin-security = { path = "../../plugins/plugin-security" }
+
+# Internal crates
+soft-kvm-core = { path = "../../crates/core" }
+soft-kvm-discovery = { path = "../../crates/discovery" }
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT remove this
+custom-protocol = ["tauri/custom-protocol"]
