@@ -16,17 +16,23 @@
 //!
 //! Tauri plugin for keyboard and mouse input handling
 
-use tauri::{plugin::Builder, plugin::TauriPlugin, Runtime};
+use tauri::{plugin::Builder, plugin::TauriPlugin, Runtime, Manager};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-#[derive(Serialize, Deserialize, Debug)]
+mod capture;
+mod injection;
+mod platform;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KeyboardEvent {
     pub key_code: u32,
     pub pressed: bool,
     pub modifiers: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MouseEvent {
     pub x: i32,
     pub y: i32,
@@ -35,38 +41,199 @@ pub struct MouseEvent {
     pub wheel_delta: Option<i32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InputConfig {
     pub keyboard_enabled: bool,
     pub mouse_enabled: bool,
 }
 
+#[derive(Debug)]
+struct InputCaptureState {
+    is_capturing: bool,
+    config: Option<InputConfig>,
+    capture_task: Option<tokio::task::JoinHandle<()>>,
+    event_sender: Option<tokio::sync::mpsc::Sender<InputEvent>>,
+}
+
+impl Default for InputCaptureState {
+    fn default() -> Self {
+        InputCaptureState {
+            is_capturing: false,
+            config: None,
+            capture_task: None,
+            event_sender: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum InputEvent {
+    Keyboard(KeyboardEvent),
+    Mouse(MouseEvent),
+}
+
 /// Start input capture
 #[tauri::command]
-async fn start_input_capture(config: InputConfig) -> Result<String, String> {
+async fn start_input_capture(
+    config: InputConfig,
+    state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
+) -> Result<String, String> {
+    let mut capture_state = state.write().await;
+
+    if capture_state.is_capturing {
+        return Err("Input capture is already running".to_string());
+    }
+
     println!("Starting input capture with config: {:?}", config);
-    Ok("Input capture started".to_string())
+
+    // Create event channel
+    let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+    // Initialize platform-specific capture
+    match platform::initialize_input_capture(&config) {
+        Ok(_) => {
+            capture_state.is_capturing = true;
+            capture_state.config = Some(config.clone());
+            capture_state.event_sender = Some(tx.clone());
+
+            // Start capture task
+            let state_clone = Arc::clone(&state);
+            let task = tokio::spawn(async move {
+                input_capture_loop(state_clone, rx, config).await;
+            });
+
+            capture_state.capture_task = Some(task);
+
+            Ok("Input capture started".to_string())
+        }
+        Err(e) => Err(format!("Failed to initialize input capture: {}", e)),
+    }
 }
 
 /// Stop input capture
 #[tauri::command]
-async fn stop_input_capture() -> Result<String, String> {
+async fn stop_input_capture(state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>) -> Result<String, String> {
+    let mut capture_state = state.write().await;
+
+    if !capture_state.is_capturing {
+        return Ok("Input capture is not running".to_string());
+    }
+
     println!("Stopping input capture");
+
+    // Stop capture task
+    if let Some(task) = capture_state.capture_task.take() {
+        task.abort();
+    }
+
+    // Close event channel
+    capture_state.event_sender = None;
+
+    // Cleanup platform-specific capture
+    platform::cleanup_input_capture();
+
+    capture_state.is_capturing = false;
+    capture_state.config = None;
+
     Ok("Input capture stopped".to_string())
 }
 
-/// Send keyboard event
+/// Send keyboard event to remote system
 #[tauri::command]
-async fn send_keyboard_event(event: KeyboardEvent) -> Result<String, String> {
+async fn send_keyboard_event(
+    event: KeyboardEvent,
+    state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
+) -> Result<String, String> {
+    let capture_state = state.read().await;
+
+    if !capture_state.is_capturing {
+        return Err("Input capture is not running".to_string());
+    }
+
     println!("Sending keyboard event: {:?}", event);
-    Ok("Keyboard event sent".to_string())
+
+    // Send event to remote system via platform-specific injection
+    match platform::inject_keyboard_event(&event) {
+        Ok(_) => Ok("Keyboard event sent".to_string()),
+        Err(e) => Err(format!("Failed to send keyboard event: {}", e)),
+    }
 }
 
-/// Send mouse event
+/// Send mouse event to remote system
 #[tauri::command]
-async fn send_mouse_event(event: MouseEvent) -> Result<String, String> {
+async fn send_mouse_event(
+    event: MouseEvent,
+    state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>,
+) -> Result<String, String> {
+    let capture_state = state.read().await;
+
+    if !capture_state.is_capturing {
+        return Err("Input capture is not running".to_string());
+    }
+
     println!("Sending mouse event: {:?}", event);
-    Ok("Mouse event sent".to_string())
+
+    // Send event to remote system via platform-specific injection
+    match platform::inject_mouse_event(&event) {
+        Ok(_) => Ok("Mouse event sent".to_string()),
+        Err(e) => Err(format!("Failed to send mouse event: {}", e)),
+    }
+}
+
+/// Get input capture status
+#[tauri::command]
+async fn get_input_status(state: tauri::State<'_, Arc<RwLock<InputCaptureState>>>) -> Result<serde_json::Value, String> {
+    let capture_state = state.read().await;
+
+    let status = serde_json::json!({
+        "is_capturing": capture_state.is_capturing,
+        "config": capture_state.config,
+    });
+
+    Ok(status)
+}
+
+async fn input_capture_loop(
+    state: Arc<RwLock<InputCaptureState>>,
+    mut rx: tokio::sync::mpsc::Receiver<InputEvent>,
+    config: InputConfig,
+) {
+    println!("Input capture loop started");
+
+    loop {
+        tokio::select! {
+            // Receive input events from platform-specific capture
+            event = rx.recv() => {
+                match event {
+                    Some(InputEvent::Keyboard(keyboard_event)) => {
+                        // Process keyboard event (send to remote, record locally, etc.)
+                        println!("Captured keyboard event: {:?}", keyboard_event);
+                    }
+                    Some(InputEvent::Mouse(mouse_event)) => {
+                        // Process mouse event
+                        println!("Captured mouse event: {:?}", mouse_event);
+                    }
+                    None => {
+                        // Channel closed, exit loop
+                        break;
+                    }
+                }
+            }
+            // Check if we should continue
+            _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                let should_continue = {
+                    let capture_state = state.read().await;
+                    capture_state.is_capturing
+                };
+
+                if !should_continue {
+                    break;
+                }
+            }
+        }
+    }
+
+    println!("Input capture loop ended");
 }
 
 /// Initialize the input plugin
@@ -77,6 +244,13 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             stop_input_capture,
             send_keyboard_event,
             send_mouse_event,
+            get_input_status,
         ])
+        .setup(|_app| {
+            // Initialize capture state
+            let state = Arc::new(RwLock::new(InputCaptureState::default()));
+            _app.manage(state);
+            Ok(())
+        })
         .build()
 }

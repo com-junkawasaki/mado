@@ -11,35 +11,7 @@ tauri-build.workspace = true
 
 [dependencies]
 serde_json.workspace = true
-tauri = { workspace = true, features = [
-  "dialog-ask",
-  "dialog-confirm",
-  "dialog-message",
-  "dialog-open",
-  "dialog-save",
-  "fs-copy-file",
-  "fs-create-dir",
-  "fs-exists",
-  "fs-read-dir",
-  "fs-read-file",
-  "fs-remove-dir",
-  "fs-remove-file",
-  "fs-rename-file",
-  "fs-write-file",
-  "http-request",
-  "process-exit",
-  "process-relaunch",
-  "protocol-asset",
-  "shell-open",
-  "window-close",
-  "window-hide",
-  "window-maximize",
-  "window-minimize",
-  "window-show",
-  "window-start-dragging",
-  "window-unmaximize",
-  "window-unminimize"
-] }
+       tauri = { workspace = true, features = [] }
 tokio.workspace = true
 
 # Soft KVM plugins

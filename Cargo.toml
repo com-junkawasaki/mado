@@ -69,5 +69,5 @@ prost = "0.12"
 tonic = "0.10"
 
 # Tauri UI
-tauri = { version = "1.6", features = ["shell-open"] }
+tauri = { version = "1.6", features = [] }
 tauri-build = { version = "1.5", features = [] }

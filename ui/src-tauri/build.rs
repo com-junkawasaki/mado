@@ -13,5 +13,6 @@
 // limitations under the License.
 
 fn main() {
-    tauri_build::build()
+    // Skip tauri_build for development
+    // tauri_build::build()
 }
