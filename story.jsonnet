@@ -58,10 +58,10 @@
 
       // プロトコル層
       protocol: {
-        hash: "sha256:protocol_v1",
+        hash: "sha256:protocol_v1_complete",
         dependencies: ["core", "security"],
         description: "KVM共有プロトコル実装",
-        files: ["protocol/src/lib.rs", "protocol/Cargo.toml"]
+        files: ["protocol/src/lib.rs", "protocol/Cargo.toml", "protocol/src/messages.rs", "protocol/src/session.rs", "protocol/src/transport.rs", "protocol/src/websocket.rs"]
       },
 
       // ビデオ処理層

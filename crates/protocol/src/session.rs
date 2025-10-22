@@ -14,12 +14,15 @@
 
 //! Protocol session management
 
-use crate::{messages::*, ProtocolConfig, ProtocolError, ProtocolResult};
+use crate::{ProtocolConfig, ProtocolError, ProtocolResult};
 use soft_kvm_core::*;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, info, warn, error};
 use serde::{Serialize, Deserialize};
+
+// Re-export message types for convenience
+pub use crate::messages::{MessageType, MessagePayload, ProtocolMessage};
 
 /// Peer information for session
 #[derive(Debug, Clone)]
@@ -33,7 +36,7 @@ pub struct PeerInfo {
 }
 
 /// Session state
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SessionState {
     Connecting,
     Authenticating,
@@ -130,7 +133,7 @@ impl ProtocolSession {
 
     /// Send a message through this session
     pub async fn send_message(&self, message: ProtocolMessage) -> ProtocolResult<()> {
-        if !self.is_authenticated() && !matches!(message.message_type(), messages::MessageType::Hello | messages::MessageType::AuthRequest) {
+        if !self.is_authenticated() && !matches!(message.message_type(), MessageType::Hello | MessageType::AuthRequest) {
             return Err(ProtocolError::Authentication("Session not authenticated".to_string()));
         }
 
@@ -185,11 +188,11 @@ impl ProtocolSession {
         let mut sequence = self.heartbeat_sequence.write().await;
         *sequence += 1;
 
-        let payload = messages::MessagePayload::Heartbeat(messages::HeartbeatPayload {
+        let payload = MessagePayload::Heartbeat(crate::messages::HeartbeatPayload {
             sequence_number: *sequence,
         });
 
-        let message = ProtocolMessage::new(messages::MessageType::Heartbeat, payload)
+        let message = ProtocolMessage::new(MessageType::Heartbeat, payload)
             .with_session(self.session_id.clone());
 
         self.send_message(message).await
@@ -201,7 +204,7 @@ impl ProtocolSession {
         self.update_activity().await;
 
         // Send pong response
-        let message = ProtocolMessage::new(messages::MessageType::Pong, messages::MessagePayload::Pong)
+        let message = ProtocolMessage::new(MessageType::Pong, MessagePayload::Pong)
             .with_session(self.session_id.clone());
 
         self.send_message(message).await
@@ -209,13 +212,13 @@ impl ProtocolSession {
 
     /// Send error message
     pub async fn send_error(&self, error_code: u32, error_message: String) -> ProtocolResult<()> {
-        let payload = messages::MessagePayload::Error(messages::ErrorPayload {
+        let payload = MessagePayload::Error(crate::messages::ErrorPayload {
             error_code,
             error_message,
             details: None,
         });
 
-        let message = ProtocolMessage::new(messages::MessageType::Error, payload)
+        let message = ProtocolMessage::new(MessageType::Error, payload)
             .with_session(self.session_id.clone());
 
         self.send_message(message).await
@@ -226,12 +229,12 @@ impl ProtocolSession {
         info!("Closing session {}", self.session_id);
 
         // Send goodbye message
-        let payload = messages::MessagePayload::Goodbye(messages::GoodbyePayload {
+        let payload = MessagePayload::Goodbye(crate::messages::GoodbyePayload {
             reason: "Session closed by server".to_string(),
             code: 1000, // Normal closure
         });
 
-        let message = ProtocolMessage::new(messages::MessageType::Goodbye, payload)
+        let message = ProtocolMessage::new(MessageType::Goodbye, payload)
             .with_session(self.session_id.clone());
 
         let _ = self.send_message(message).await; // Ignore send errors during close

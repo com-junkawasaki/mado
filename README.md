@@ -241,10 +241,11 @@ valgrind --tool=memcheck ./target/release/soft-kvm-server
 - [x] **Service Plugin**: systemd/launchd/Windows Service管理
 - [x] **Security Plugin**: TLS 1.3 + X.509証明書管理 + ハンドシェイク
 - [x] **Discovery Plugin**: mDNSベースサービスディスカバリ
+- [x] **Protocol Plugin**: KVM共有プロトコル実装
 
 ### 🔄 開発中
 
-- [ ] **Protocol Plugin**: KVM共有プロトコル実装 (次期バージョン)
+- [ ] **Protocol統合**: Tauri UIとの統合
 - [ ] **Platform Integration**: OS別バックエンド実装
 - [ ] **Monitoring Plugin**: p99メトリクス収集・可視化
 - [ ] **UI Enhancement**: 完全な監視・制御インターフェース

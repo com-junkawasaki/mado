@@ -3788,6 +3788,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "soft-kvm-plugin-protocol"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "soft-kvm-core",
+ "soft-kvm-protocol",
+ "tauri",
+ "tokio",
+]
+
+[[package]]
 name = "soft-kvm-plugin-security"
 version = "0.1.0"
 dependencies = [

@@ -19,12 +19,12 @@ use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message};
+use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message, MaybeTlsStream};
 use tracing::{debug, info, warn, error};
 
 /// WebSocket over TLS connection
 pub struct WebSocketConnection {
-    stream: tokio_tungstenite::WebSocketStream<TcpStream>,
+    stream: tokio_tungstenite::WebSocketStream<MaybeTlsStream<TcpStream>>,
     remote_addr: SocketAddr,
     config: TransportConfig,
     is_alive: bool,
@@ -37,7 +37,7 @@ impl WebSocketConnection {
             .map_err(|e| ProtocolError::Transport(format!("Failed to get peer address: {}", e)))?;
 
         // Accept WebSocket connection
-        let ws_stream = accept_async(stream)
+        let ws_stream = accept_async(tokio_tungstenite::MaybeTlsStream::Plain(stream))
             .await
             .map_err(|e| ProtocolError::WebSocket(format!("Failed to accept WebSocket: {}", e)))?;
 
@@ -59,6 +59,9 @@ impl WebSocketConnection {
             .await
             .map_err(|e| ProtocolError::WebSocket(format!("Failed to connect WebSocket: {}", e)))?;
 
+        // Convert the WebSocket stream to TcpStream based type
+        // Note: This is a simplified implementation. In practice, you might need
+        // to handle TLS streams differently
         Ok(WebSocketConnection {
             stream: ws_stream,
             remote_addr: addr,
