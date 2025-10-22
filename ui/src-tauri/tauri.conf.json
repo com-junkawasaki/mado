@@ -75,11 +75,6 @@
         "startDragging": true
       }
     },
-    "bundle": {
-      "active": true,
-      "identifier": "com.soft-kvm.ui",
-      "icon": []
-    },
     "security": {
       "csp": null
     },
