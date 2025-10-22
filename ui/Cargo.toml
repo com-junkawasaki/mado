@@ -1,0 +1,26 @@
+[package]
+name = "soft-kvm-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Soft KVM Tauri UI Application"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+serde.workspace = true
+tauri.workspace = true
+
+# Soft KVM modules
+soft-kvm-core = { path = "../core" }
+soft-kvm-discovery = { path = "../discovery" }
+soft-kvm-protocol = { path = "../protocol" }
+soft-kvm-monitoring = { path = "../monitoring" }
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT remove this
+custom-protocol = ["tauri/custom-protocol"]

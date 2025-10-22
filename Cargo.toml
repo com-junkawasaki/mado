@@ -2,9 +2,16 @@
 members = [
     "core",
     "discovery",
+    "security",
+    "protocol",
+    "video",
+    "input",
     "platform",
     "service",
     "monitoring",
+    "server",
+    "client",
+    "ui",
 ]
 resolver = "2"
 
@@ -65,3 +72,8 @@ metrics-exporter-prometheus = "0.15"
 # Build dependencies
 prost = "0.12"
 tonic = "0.10"
+
+# Tauri UI
+tauri = { version = "1.6", features = ["shell-open"] }
+tauri-build = { version = "1.5", features = [] }
+serde_json = "1.0"
