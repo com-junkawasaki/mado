@@ -1,0 +1,21 @@
+[package]
+name = "soft-kvm-plugin-discovery"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Soft KVM Discovery Plugin"
+
+[lib]
+name = "soft_kvm_plugin_discovery"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
+tauri = { version = "1.6", features = ["shell-open"] }
+tokio.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+soft-kvm-core = { path = "../../crates/core" }
+soft-kvm-discovery = { path = "../../crates/discovery" }

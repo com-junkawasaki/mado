@@ -30,6 +30,7 @@ use tokio::sync::RwLock;
 use soft_kvm_plugin_input::init as input_plugin_init;
 use soft_kvm_plugin_service::init as service_plugin_init;
 use soft_kvm_plugin_security::init as security_plugin_init;
+use soft_kvm_plugin_discovery::init as discovery_plugin_init;
 
 // Internal crates
 use soft_kvm_core::*;
@@ -161,6 +162,7 @@ fn main() {
         .plugin(input_plugin_init())
         .plugin(service_plugin_init())
         .plugin(security_plugin_init())
+        .plugin(discovery_plugin_init())
         // UI-specific commands
         .invoke_handler(tauri::generate_handler![
             get_available_servers_ui,

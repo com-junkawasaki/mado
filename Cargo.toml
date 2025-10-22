@@ -2,7 +2,7 @@
 members = [
     "crates/core",
     "crates/discovery",
-    "plugins/plugin-video",
+    "plugins/plugin-discovery",
     "plugins/plugin-input",
     "plugins/plugin-service",
     "plugins/plugin-security",
