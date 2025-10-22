@@ -1,0 +1,35 @@
+[package]
+name = "soft-kvm-platform"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "OS別バックエンド統合"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# Linux specific
+[target.'cfg(target_os = "linux")'.dependencies]
+wayland-client = "0.31"
+wayland-protocols = "0.31"
+smithay-client-toolkit = "0.18"
+x11rb = "0.13"
+dbus = "0.9"
+
+# macOS specific
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
+objc = "0.2"
+core-graphics = "0.23"
+
+# Windows specific
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
+
+# Image processing
+image = "0.24"

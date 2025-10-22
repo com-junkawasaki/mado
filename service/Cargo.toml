@@ -1,0 +1,28 @@
+[package]
+name = "soft-kvm-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "システムサービス統合"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# Service management
+[target.'cfg(target_os = "linux")'.dependencies]
+systemd = "0.10"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+launchd = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-service = "0.6"
+winapi = "0.3"
+
+# Configuration
+config = "0.14"

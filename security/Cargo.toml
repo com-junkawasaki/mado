@@ -1,0 +1,25 @@
+[package]
+name = "soft-kvm-security"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "TLS 1.3ハンドシェイクと暗号化"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+tokio.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# TLS implementation
+rustls.workspace = true
+tokio-rustls = "0.24"
+
+# Certificate handling
+rcgen = "0.11"
+webpki = "0.22"
+
+# Cryptography utilities
+ring.workspace = true
