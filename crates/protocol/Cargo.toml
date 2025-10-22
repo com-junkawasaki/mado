@@ -1,0 +1,36 @@
+[package]
+name = "soft-kvm-protocol"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Soft KVM Protocol Implementation"
+
+[lib]
+name = "soft_kvm_protocol"
+path = "src/lib.rs"
+
+[dependencies]
+soft-kvm-core = { path = "../core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite = "0.20"
+futures.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+
+# Protobuf for message serialization
+prost = "0.12"
+prost-types = "0.12"
+
+# Async traits
+async-trait = "0.1"
+
+# URL parsing
+url = "2.5"
+
+[build-dependencies]
+prost-build = "0.12"
