@@ -173,6 +173,6 @@ fn main() {
             update_settings_ui,
             get_connection_status,
         ])
-        .run(tauri::Context::default())
+        .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
