@@ -22,6 +22,11 @@ soft-kvm-plugin-security = { path = "../../plugins/plugin-security" }
 # Internal crates
 soft-kvm-core = { path = "../../crates/core" }
 soft-kvm-discovery = { path = "../../crates/discovery" }
+soft-kvm-protocol = { path = "../../crates/protocol" }
+
+# Additional dependencies
+uuid.workspace = true
+chrono.workspace = true
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

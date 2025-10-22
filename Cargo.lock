@@ -3862,15 +3862,18 @@ dependencies = [
 name = "soft-kvm-ui-tauri"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "serde_json",
  "soft-kvm-core",
  "soft-kvm-discovery",
  "soft-kvm-plugin-input",
  "soft-kvm-plugin-security",
  "soft-kvm-plugin-service",
+ "soft-kvm-protocol",
  "tauri",
  "tauri-build",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

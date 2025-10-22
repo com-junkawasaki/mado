@@ -266,10 +266,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             get_protocol_status,
             shutdown_protocol,
         ])
-        .setup(|_app| {
+        .setup(|app| {
             // Initialize protocol plugin state
             let state = Arc::new(RwLock::new(ProtocolPluginState::default()));
-            _app.manage(state);
+            app.manage(state);
             Ok(())
         })
         .build()
