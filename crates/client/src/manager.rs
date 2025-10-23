@@ -43,10 +43,10 @@ impl ClientManager {
         Ok(())
     }
 
-    /// Get a client by ID
-    pub async fn get_client(&self, client_id: &str) -> Option<KvmClient> {
+    /// Get a client by ID (returns a copy of the ID if found)
+    pub async fn get_client(&self, client_id: &str) -> Option<String> {
         let clients = self.clients.read().await;
-        clients.get(client_id).cloned()
+        clients.contains_key(client_id).then(|| client_id.to_string())
     }
 
     /// Connect a client
@@ -92,7 +92,7 @@ impl ClientManager {
         if let Some(client) = clients.get(client_id) {
             client.status().await
         } else {
-            Err(ClientError::Generic(format!("Client {} not found", client_id)));
+            Err(ClientError::Generic(format!("Client {} not found", client_id)))
         }
     }
 }

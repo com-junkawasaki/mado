@@ -43,10 +43,10 @@ impl ServerManager {
         Ok(())
     }
 
-    /// Get a server by ID (returns a reference)
-    pub async fn get_server(&self, server_id: &str) -> Option<&KvmServer> {
+    /// Get a server by ID (returns a copy of the ID if found)
+    pub async fn get_server(&self, server_id: &str) -> Option<String> {
         let servers = self.servers.read().await;
-        servers.get(server_id)
+        servers.contains_key(server_id).then(|| server_id.to_string())
     }
 
     /// Start a server

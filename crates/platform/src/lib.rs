@@ -52,7 +52,7 @@ pub enum PlatformError {
 }
 
 /// Platform manager for handling platform-specific operations
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PlatformManager {
     #[cfg(target_os = "linux")]
     Linux {
@@ -266,6 +266,72 @@ impl PlatformManager {
                     vc.stop_capture().await
                 } else {
                     Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            PlatformManager::Unsupported => {
+                Err(PlatformError::UnsupportedPlatform("Platform not supported".to_string()))
+            }
+        }
+    }
+
+    /// Send keyboard event to remote system
+    pub async fn send_keyboard_event(&mut self, event: soft_kvm_core::KeyboardEvent) -> PlatformResult<()> {
+        match self {
+            #[cfg(target_os = "linux")]
+            PlatformManager::Linux { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.send_keyboard_event(event).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "macos")]
+            PlatformManager::MacOs { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.send_keyboard_event(event).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "windows")]
+            PlatformManager::Windows { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.send_keyboard_event(event).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            PlatformManager::Unsupported => {
+                Err(PlatformError::UnsupportedPlatform("Platform not supported".to_string()))
+            }
+        }
+    }
+
+    /// Send mouse event to remote system
+    pub async fn send_mouse_event(&mut self, event: soft_kvm_core::MouseEvent) -> PlatformResult<()> {
+        match self {
+            #[cfg(target_os = "linux")]
+            PlatformManager::Linux { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.send_mouse_event(event).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "macos")]
+            PlatformManager::MacOs { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.send_mouse_event(event).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "windows")]
+            PlatformManager::Windows { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.send_mouse_event(event).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
                 }
             }
             PlatformManager::Unsupported => {

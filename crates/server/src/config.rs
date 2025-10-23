@@ -122,7 +122,10 @@ impl ServerConfigFile {
         };
 
         let video_config = VideoConfig {
-            resolution: VideoResolution::Custom(self.server.video.width, self.server.video.height),
+            resolution: VideoResolution {
+                width: self.server.video.width,
+                height: self.server.video.height,
+            },
             fps: self.server.video.fps,
             quality: video_quality,
             compression: self.server.video.compression,

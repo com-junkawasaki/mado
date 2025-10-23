@@ -37,6 +37,12 @@ impl NetworkAddress {
     }
 }
 
+impl std::fmt::Display for NetworkAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.ip, self.port)
+    }
+}
+
 /// Video quality settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoQuality {

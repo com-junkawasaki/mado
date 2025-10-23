@@ -62,20 +62,20 @@ impl ServerMessageHandler {
     ) -> ServerResult<()> {
         debug!("Server handling message: {:?}", message.message_type());
 
-        match message.payload {
-            Some(MessagePayload::Hello(payload)) => {
+        match message.payload.clone() {
+            MessagePayload::Hello(payload) => {
                 self.handle_hello(message, payload, sender).await
             }
-            Some(MessagePayload::AuthRequest(payload)) => {
+            MessagePayload::AuthRequest(payload) => {
                 self.handle_auth_request(message, payload, sender).await
             }
-            Some(MessagePayload::Heartbeat(payload)) => {
+            MessagePayload::Heartbeat(payload) => {
                 self.handle_heartbeat(message, payload).await
             }
-            Some(MessagePayload::Goodbye(payload)) => {
+            MessagePayload::Goodbye(payload) => {
                 self.handle_goodbye(message, payload).await
             }
-            Some(MessagePayload::InputEvent(payload)) => {
+            MessagePayload::InputEvent(payload) => {
                 self.handle_input_event(message, payload).await
             }
             _ => {
@@ -137,13 +137,10 @@ impl ServerMessageHandler {
             server_info: ServerInfo {
                 server_id: "soft-kvm-server".to_string(),
                 server_name: self.config.server_name.clone(),
-                platform: std::env::consts::OS.to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                capabilities: vec!["video".to_string(), "input".to_string()],
+                protocol_version: PROTOCOL_VERSION.to_string(),
             },
             session_id: session_id.clone(),
-            supported_protocols: vec![PROTOCOL_VERSION.to_string()],
-            server_capabilities: vec!["video".to_string(), "input".to_string()],
+            negotiated_capabilities: vec!["video".to_string(), "input".to_string()],
         };
 
         let response = ProtocolMessage::new(
@@ -172,24 +169,24 @@ impl ServerMessageHandler {
             success: true,
             session_token: Some("dummy-token".to_string()),
             error_message: None,
-            client_capabilities: Some(vec!["video".to_string(), "input".to_string()]),
         };
 
         let response = ProtocolMessage::new(
             MessageType::AuthResponse,
             MessagePayload::AuthResponse(auth_response),
-        ).with_session(message.session_id);
+        ).with_session(message.session_id().unwrap_or(&"unknown".to_string()).clone());
 
         sender.send(response)
             .map_err(|e| ServerError::Generic(format!("Failed to send auth response: {}", e)))?;
 
         // Mark session as authenticated
         let mut active_sessions = self.active_sessions.write().await;
-        if let Some(session) = active_sessions.get_mut(&message.session_id) {
+        let session_id = message.session_id().unwrap_or(&"unknown".to_string()).to_string();
+        if let Some(session) = active_sessions.get_mut(&session_id) {
             session.last_activity = chrono::Utc::now();
         }
 
-        info!("Authentication successful for session: {}", message.session_id);
+        info!("Authentication successful for session: {}", message.session_id().unwrap_or(&"unknown".to_string()));
         Ok(())
     }
 
@@ -200,11 +197,12 @@ impl ServerMessageHandler {
         payload: HeartbeatPayload,
     ) -> ServerResult<()> {
         debug!("Received heartbeat from session: {} (seq: {})",
-               message.session_id, payload.sequence_number);
+               message.session_id().unwrap_or(&"unknown".to_string()), payload.sequence_number);
 
         // Update last activity
         let mut active_sessions = self.active_sessions.write().await;
-        if let Some(session) = active_sessions.get_mut(&message.session_id) {
+        let session_id = message.session_id().unwrap_or(&"unknown".to_string()).to_string();
+        if let Some(session) = active_sessions.get_mut(&session_id) {
             session.last_activity = chrono::Utc::now();
         }
 
@@ -218,14 +216,15 @@ impl ServerMessageHandler {
         payload: GoodbyePayload,
     ) -> ServerResult<()> {
         info!("Received goodbye from session: {} (reason: {})",
-              message.session_id, payload.reason);
+              message.session_id().unwrap_or(&"unknown".to_string()), payload.reason);
 
         // Remove session
         let mut active_sessions = self.active_sessions.write().await;
-        active_sessions.remove(&message.session_id);
+        let session_id = message.session_id().unwrap_or(&"unknown".to_string()).to_string();
+        active_sessions.remove(&session_id);
 
         let mut protocol_manager = self.protocol_manager.write().await;
-        protocol_manager.remove_session(&message.session_id).await?;
+        protocol_manager.remove_session(&message.session_id().unwrap_or(&"unknown".to_string())).await?;
 
         Ok(())
     }
@@ -236,18 +235,18 @@ impl ServerMessageHandler {
         message: ProtocolMessage,
         payload: InputEventPayload,
     ) -> ServerResult<()> {
-        debug!("Received input event from session: {}", message.session_id);
+        debug!("Received input event from session: {}", message.session_id().unwrap_or(&"unknown".to_string()));
 
         // Forward input events to platform
         if let Some(platform) = &mut self.platform_manager {
-            match payload.event_type() {
+            match payload.event_type.as_str() {
                 "keyboard" => {
-                    if let Some(keyboard_event) = payload.keyboard_event {
+                    if let Ok(keyboard_event) = serde_json::from_value::<soft_kvm_core::KeyboardEvent>(payload.data.clone()) {
                         platform.send_keyboard_event(keyboard_event).await?;
                     }
                 }
                 "mouse" => {
-                    if let Some(mouse_event) = payload.mouse_event {
+                    if let Ok(mouse_event) = serde_json::from_value::<soft_kvm_core::MouseEvent>(payload.data.clone()) {
                         platform.send_mouse_event(mouse_event).await?;
                     }
                 }
@@ -259,7 +258,8 @@ impl ServerMessageHandler {
 
         // Update last activity
         let mut active_sessions = self.active_sessions.write().await;
-        if let Some(session) = active_sessions.get_mut(&message.session_id) {
+        let session_id = message.session_id().unwrap_or(&"unknown".to_string()).to_string();
+        if let Some(session) = active_sessions.get_mut(&session_id) {
             session.last_activity = chrono::Utc::now();
         }
 

@@ -212,8 +212,8 @@ pub use macos::*;
 mod macos {
     use super::*;
 
-    #[derive(Debug)]
-    pub struct MacOsSystemService;
+#[derive(Debug, Clone)]
+pub struct MacOsSystemService;
 
     impl MacOsSystemService {
         pub fn new() -> PlatformResult<Self> {
@@ -282,8 +282,8 @@ pub use windows::*;
 mod windows {
     use super::*;
 
-    #[derive(Debug)]
-    pub struct WindowsSystemService;
+#[derive(Debug, Clone)]
+pub struct WindowsSystemService;
 
     impl WindowsSystemService {
         pub fn new() -> PlatformResult<Self> {

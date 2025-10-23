@@ -154,8 +154,8 @@ pub use macos::*;
 mod macos {
     use super::*;
 
-    #[derive(Debug)]
-    pub struct MacOsVideoCapture {
+#[derive(Debug, Clone)]
+pub struct MacOsVideoCapture {
         is_capturing: bool,
         device_info: VideoDeviceInfo,
     }
@@ -264,8 +264,8 @@ pub use windows::*;
 mod windows {
     use super::*;
 
-    #[derive(Debug)]
-    pub struct WindowsVideoCapture {
+#[derive(Debug, Clone)]
+pub struct WindowsVideoCapture {
         is_capturing: bool,
         device_info: VideoDeviceInfo,
     }

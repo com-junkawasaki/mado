@@ -42,6 +42,9 @@ pub enum ClientError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+
     #[error("Configuration error: {0}")]
     Config(String),
 
@@ -143,9 +146,11 @@ impl KvmClient {
     pub async fn connect(&mut self) -> ClientResult<()> {
         info!("Connecting to KVM server at {}", self.config.server_address);
 
-        let mut is_connected = self.is_connected.write().await;
-        if *is_connected {
-            return Err(ClientError::Generic("Client already connected".to_string()));
+        {
+            let is_connected = self.is_connected.read().await;
+            if *is_connected {
+                return Err(ClientError::Generic("Client already connected".to_string()));
+            }
         }
 
         let addr = format!("{}:{}", self.config.server_address.ip, self.config.server_address.port)
@@ -159,6 +164,7 @@ impl KvmClient {
         // Send hello message
         self.send_hello().await?;
 
+        let mut is_connected = self.is_connected.write().await;
         *is_connected = true;
         info!("KVM client connected successfully");
         Ok(())
@@ -168,15 +174,19 @@ impl KvmClient {
     pub async fn disconnect(&mut self) -> ClientResult<()> {
         info!("Disconnecting from KVM server");
 
-        let mut is_connected = self.is_connected.write().await;
-        if !*is_connected {
-            return Ok(());
+        {
+            let is_connected = self.is_connected.read().await;
+            if !*is_connected {
+                return Ok(());
+            }
         }
-        *is_connected = false;
 
         // Send goodbye message
-        if let Some(session_id) = self.session_id.read().await.as_ref() {
-            self.send_goodbye(session_id.clone(), "Client disconnecting".to_string()).await?;
+        {
+            let session_id = self.session_id.read().await.clone();
+            if let Some(session_id) = session_id {
+                self.send_goodbye(session_id, "Client disconnecting".to_string()).await?;
+            }
         }
 
         // Disconnect protocol
@@ -184,6 +194,9 @@ impl KvmClient {
         protocol_manager.disconnect_client().await?;
         protocol_manager.stop().await?;
         drop(protocol_manager);
+
+        let mut is_connected = self.is_connected.write().await;
+        *is_connected = false;
 
         let mut session_id = self.session_id.write().await;
         *session_id = None;
@@ -247,9 +260,7 @@ impl KvmClient {
 
         let input_payload = InputEventPayload {
             event_type: "keyboard".to_string(),
-            keyboard_event: Some(event),
-            mouse_event: None,
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            data: serde_json::to_value(event).unwrap(),
         };
 
         let message = ProtocolMessage::new(
@@ -275,9 +286,7 @@ impl KvmClient {
 
         let input_payload = InputEventPayload {
             event_type: "mouse".to_string(),
-            keyboard_event: None,
-            mouse_event: Some(event),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+            data: serde_json::to_value(event).unwrap(),
         };
 
         let message = ProtocolMessage::new(

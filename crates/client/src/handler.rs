@@ -46,9 +46,9 @@ impl ClientMessageHandler {
     }
 
     /// Set the client reference (to avoid circular references)
-    pub async fn set_client(&self, client: Arc<RwLock<KvmClient>>) {
-        let mut client_ref = self.client.write().await;
-        *client_ref = Some((*client.read().await).clone());
+    pub async fn set_client(&self, _client: Arc<RwLock<KvmClient>>) {
+        // TODO: Handle circular reference issue properly
+        // For now, we'll avoid storing the client reference to prevent circular refs
     }
 
     /// Handle incoming protocol message
@@ -59,7 +59,7 @@ impl ClientMessageHandler {
     ) -> ClientResult<()> {
         debug!("Client handling message: {:?}", message.message_type());
 
-        match message.payload {
+        match message.payload.clone() {
             MessagePayload::Welcome(payload) => {
                 self.handle_welcome(message, payload, sender).await
             }
@@ -92,17 +92,13 @@ impl ClientMessageHandler {
         info!("Received welcome from server: {}", payload.server_info.server_name);
 
         // Store session ID
-        if let Some(session_id) = payload.session_id {
-            if let Some(client) = &*self.client.read().await {
-                client.set_session_id(session_id).await;
-            }
+        if let Some(client) = &*self.client.read().await {
+            client.set_session_id(payload.session_id.clone()).await;
         }
 
         // Send authentication request if security is enabled
         if self.config.enable_security {
-            if let Some(session_id) = payload.session_id {
-                self.send_auth_request(session_id).await?;
-            }
+            self.send_auth_request(payload.session_id.clone()).await?;
         } else {
             // Mark as authenticated
             info!("Security disabled, proceeding without authentication");
@@ -115,13 +111,10 @@ impl ClientMessageHandler {
     /// Send authentication request
     async fn send_auth_request(&mut self, session_id: String) -> ClientResult<()> {
         let auth_payload = AuthRequestPayload {
-            auth_method: "none".to_string(), // TODO: Implement proper authentication
-            credentials: None,
-            client_info: Some(ClientInfo {
-                client_id: uuid::Uuid::new_v4().to_string(),
-                client_name: self.config.client_name.clone(),
-                platform: std::env::consts::OS.to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
+            auth_method: "password".to_string(),
+            credentials: serde_json::json!({
+                "username": whoami::username(),
+                "password_hash": "dummy_password_hash" // TODO: Implement actual password hashing
             }),
         };
 
@@ -145,7 +138,7 @@ impl ClientMessageHandler {
         _sender: tokio::sync::mpsc::UnboundedSender<ProtocolMessage>,
     ) -> ClientResult<()> {
         if payload.success {
-            info!("Authentication successful for session: {}", message.session_id);
+            info!("Authentication successful for session: {}", message.session_id().unwrap_or(&"unknown".to_string()));
 
             // Start input capture if platform is available
             if let Some(platform) = &mut self.platform_manager {

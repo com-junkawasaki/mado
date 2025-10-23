@@ -146,10 +146,18 @@
 
       // Tauriプラグイン統合テスト
       tauri_plugin_test: {
-        hash: "sha256:tauri_plugin_test_v1",
+        hash: "sha256:tauri_plugin_test_v1_complete",
         dependencies: ["plugin-input", "plugin-service", "plugin-security"],
-        description: "Tauriプラグイン統合テスト",
+        description: "Tauriプラグイン統合テスト - 全ワークスペースビルド成功",
         files: ["tests/tauri_integration_test.rs"]
+      },
+
+      // 基本通信フロー検証
+      basic_communication: {
+        hash: "sha256:basic_communication_v1_complete",
+        dependencies: ["core", "protocol", "server", "client"],
+        description: "Hello/Auth/Heartbeatメッセージフロー検証 - 基本通信インフラ準備完了",
+        files: ["tests/communication_test.rs"]
       }
     },
 

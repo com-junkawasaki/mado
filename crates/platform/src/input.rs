@@ -146,8 +146,8 @@ pub use macos::*;
 mod macos {
     use super::*;
 
-    #[derive(Debug)]
-    pub struct MacOsInputCapture {
+#[derive(Debug, Clone)]
+pub struct MacOsInputCapture {
         is_capturing: bool,
         device_info: InputDeviceInfo,
     }
@@ -227,8 +227,8 @@ pub use windows::*;
 mod windows {
     use super::*;
 
-    #[derive(Debug)]
-    pub struct WindowsInputCapture {
+#[derive(Debug, Clone)]
+pub struct WindowsInputCapture {
         is_capturing: bool,
         device_info: InputDeviceInfo,
     }
