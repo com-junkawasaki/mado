@@ -21,7 +21,7 @@ pub mod handler;
 pub mod manager;
 
 use soft_kvm_core::*;
-use soft_kvm_protocol::*;
+use soft_kvm_protocol::{messages::*, session::*, *};
 use soft_kvm_platform::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;

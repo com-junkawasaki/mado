@@ -123,17 +123,33 @@
 
       // 実行可能バイナリ
       server: {
-        hash: "sha256:server_v1",
+        hash: "sha256:server_v1_complete",
         dependencies: ["core", "discovery", "security", "protocol", "video", "input", "platform", "service", "monitoring"],
         description: "KVMサーバー実装",
-        files: ["server/src/main.rs", "server/Cargo.toml"]
+        files: ["server/src/lib.rs", "server/Cargo.toml", "server/src/config.rs", "server/src/handler.rs", "server/src/manager.rs"]
       },
 
       client: {
-        hash: "sha256:client_v1",
+        hash: "sha256:client_v1_complete",
         dependencies: ["core", "discovery", "security", "protocol", "platform", "monitoring"],
         description: "KVMクライアント実装",
-        files: ["client/src/main.rs", "client/Cargo.toml"]
+        files: ["client/src/lib.rs", "client/Cargo.toml", "client/src/config.rs", "client/src/handler.rs", "client/src/manager.rs"]
+      },
+
+      // 統合テスト
+      integration_test: {
+        hash: "sha256:integration_test_v1",
+        dependencies: ["core", "protocol", "platform"],
+        description: "統合テストスイート",
+        files: ["tests/integration_test.rs", "tests/tauri_integration_test.rs"]
+      },
+
+      // Tauriプラグイン統合テスト
+      tauri_plugin_test: {
+        hash: "sha256:tauri_plugin_test_v1",
+        dependencies: ["plugin-input", "plugin-service", "plugin-security"],
+        description: "Tauriプラグイン統合テスト",
+        files: ["tests/tauri_integration_test.rs"]
       }
     },
 

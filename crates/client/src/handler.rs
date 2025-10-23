@@ -16,7 +16,7 @@
 
 use crate::{ClientConfig, ClientResult, ClientError, KvmClient};
 use soft_kvm_core::*;
-use soft_kvm_protocol::*;
+use soft_kvm_protocol::{messages::*, session::*, *};
 use soft_kvm_platform::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -60,19 +60,19 @@ impl ClientMessageHandler {
         debug!("Client handling message: {:?}", message.message_type());
 
         match message.payload {
-            Some(MessagePayload::Welcome(payload)) => {
+            MessagePayload::Welcome(payload) => {
                 self.handle_welcome(message, payload, sender).await
             }
-            Some(MessagePayload::AuthResponse(payload)) => {
+            MessagePayload::AuthResponse(payload) => {
                 self.handle_auth_response(message, payload, sender).await
             }
-            Some(MessagePayload::Heartbeat(payload)) => {
+            MessagePayload::Heartbeat(payload) => {
                 self.handle_heartbeat(message, payload).await
             }
-            Some(MessagePayload::Goodbye(payload)) => {
+            MessagePayload::Goodbye(payload) => {
                 self.handle_goodbye(message, payload).await
             }
-            Some(MessagePayload::VideoFrame(payload)) => {
+            MessagePayload::VideoFrame(payload) => {
                 self.handle_video_frame(message, payload).await
             }
             _ => {
@@ -92,13 +92,17 @@ impl ClientMessageHandler {
         info!("Received welcome from server: {}", payload.server_info.server_name);
 
         // Store session ID
-        if let Some(client) = &*self.client.read().await {
-            client.set_session_id(payload.session_id.clone()).await;
+        if let Some(session_id) = payload.session_id {
+            if let Some(client) = &*self.client.read().await {
+                client.set_session_id(session_id).await;
+            }
         }
 
         // Send authentication request if security is enabled
         if self.config.enable_security {
-            self.send_auth_request(payload.session_id).await?;
+            if let Some(session_id) = payload.session_id {
+                self.send_auth_request(session_id).await?;
+            }
         } else {
             // Mark as authenticated
             info!("Security disabled, proceeding without authentication");
@@ -166,10 +170,11 @@ impl ClientMessageHandler {
         debug!("Received heartbeat from server (seq: {})", payload.sequence_number);
 
         // Send heartbeat response
+        let session_id = message.session_id().unwrap_or(&"".to_string()).clone();
         let pong_message = ProtocolMessage::new(
             MessageType::Pong,
             MessagePayload::Pong,
-        ).with_session(message.session_id);
+        ).with_session(session_id);
 
         let mut protocol_manager = self.protocol_manager.write().await;
         protocol_manager.send_client_message(pong_message).await?;
