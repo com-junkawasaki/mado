@@ -4,6 +4,8 @@ members = [
     "crates/discovery",
     "crates/platform",
     "crates/protocol",
+    "crates/server",
+    "crates/client",
     "plugins/plugin-discovery",
     "plugins/plugin-input",
     "plugins/plugin-protocol",
