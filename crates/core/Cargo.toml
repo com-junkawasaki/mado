@@ -18,3 +18,9 @@ tracing.workspace = true
 tokio.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+
+[dev-dependencies]
+soft-kvm-server = { path = "../server" }
+soft-kvm-client = { path = "../client" }
+soft-kvm-protocol = { path = "../protocol" }
+soft-kvm-platform = { path = "../platform" }

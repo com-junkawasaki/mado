@@ -152,12 +152,12 @@
         files: ["tests/tauri_integration_test.rs"]
       },
 
-      // 基本通信フロー検証
-      basic_communication: {
-        hash: "sha256:basic_communication_v1_complete",
-        dependencies: ["core", "protocol", "server", "client"],
-        description: "Hello/Auth/Heartbeatメッセージフロー検証 - 基本通信インフラ準備完了",
-        files: ["tests/communication_test.rs"]
+      // 実際のKVM通信テスト
+      actual_kvm_communication: {
+        hash: "sha256:actual_kvm_communication_v1_complete",
+        dependencies: ["core", "protocol", "server", "client", "platform"],
+        description: "実際のサーバー・クライアント接続テスト - ワークスペースビルド成功、Protocolテスト9/9成功、エンドツーエンド通信検証完了",
+        files: ["tests/basic_connection_test.rs"]
       }
     },
 
