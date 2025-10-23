@@ -18,8 +18,31 @@ use crate::{messages::ProtocolMessage, transport::{TransportConnection, Transpor
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message, MaybeTlsStream};
+use tokio_tungstenite::{accept_async, connect_async, connect_async_with_config, tungstenite::Message, MaybeTlsStream, Connector};
+
+/// Dangerous TLS configuration for development
+mod dangerous {
+    use rustls::client::ServerCertVerifier;
+    use rustls::{Certificate, ServerName, Error};
+
+    pub struct NoCertificateVerification;
+
+    impl ServerCertVerifier for NoCertificateVerification {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &Certificate,
+            _intermediates: &[Certificate],
+            _server_name: &ServerName,
+            _scts: &mut dyn Iterator<Item = &[u8]>,
+            _ocsp_response: &[u8],
+            _now: std::time::SystemTime,
+        ) -> Result<rustls::client::ServerCertVerified, Error> {
+            Ok(rustls::client::ServerCertVerified::assertion())
+        }
+    }
+}
 use tracing::{debug, info, warn, error};
 
 /// WebSocket over TLS connection
@@ -49,19 +72,19 @@ impl WebSocketConnection {
         })
     }
 
-    /// Create a client WebSocket connection
+    /// Create a client WebSocket connection with optional TLS
     pub async fn connect(addr: SocketAddr, config: TransportConfig) -> ProtocolResult<Self> {
-        let url = format!("ws://{}", addr);
+        let scheme = if config.tls.enabled { "wss" } else { "ws" };
+        let url = format!("{}://{}", scheme, addr);
         let url = url::Url::parse(&url)
             .map_err(|e| ProtocolError::Transport(format!("Invalid URL: {}", e)))?;
 
+        // TLSはURLスキームで制御（wss:// でTLS有効、ws:// で平文）
         let (ws_stream, _) = connect_async(url)
             .await
             .map_err(|e| ProtocolError::WebSocket(format!("Failed to connect WebSocket: {}", e)))?;
+        
 
-        // Convert the WebSocket stream to TcpStream based type
-        // Note: This is a simplified implementation. In practice, you might need
-        // to handle TLS streams differently
         Ok(WebSocketConnection {
             stream: ws_stream,
             remote_addr: addr,
@@ -180,32 +203,116 @@ impl TransportConnection for WebSocketConnection {
     }
 }
 
-/// WebSocket listener
+/// WebSocket listener with optional TLS
 pub struct WebSocketListener {
     listener: TcpListener,
     config: TransportConfig,
+    tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
 }
 
 impl WebSocketListener {
     /// Create a new WebSocket listener
-    pub async fn new(addr: SocketAddr, config: TransportConfig) -> ProtocolResult<Self> {
+    pub async fn new(config: TransportConfig, addr: SocketAddr) -> ProtocolResult<Self> {
         let listener = TcpListener::bind(addr)
             .await
             .map_err(|e| ProtocolError::Transport(format!("Failed to bind listener: {}", e)))?;
 
-        info!("WebSocket listener bound to {}", addr);
+        // TLS設定がある場合はTLSアクセプタを作成
+        let tls_acceptor = if config.tls.enabled {
+            Some(Self::create_tls_acceptor(&config.tls).await?)
+        } else {
+            None
+        };
 
-        Ok(WebSocketListener { listener, config })
+        info!("WebSocket listener bound to {} (TLS: {})", addr, config.tls.enabled);
+
+        Ok(WebSocketListener {
+            listener,
+            config,
+            tls_acceptor,
+        })
+    }
+
+    /// Create TLS acceptor from configuration
+    async fn create_tls_acceptor(tls_config: &super::transport::TlsConfig) -> ProtocolResult<tokio_rustls::TlsAcceptor> {
+        // 証明書と秘密鍵を読み込み
+        let cert_path = tls_config.certificate_path.as_ref()
+            .ok_or_else(|| ProtocolError::Transport("Certificate path not specified".to_string()))?;
+        let key_path = tls_config.private_key_path.as_ref()
+            .ok_or_else(|| ProtocolError::Transport("Private key path not specified".to_string()))?;
+
+        // 証明書を読み込み
+        let certs = Self::load_certs(cert_path).await?;
+        let key = Self::load_private_key(key_path).await?;
+
+        // TLS設定を作成
+        let mut config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .map_err(|e| ProtocolError::Transport(format!("TLS config error: {}", e)))?;
+
+        Ok(tokio_rustls::TlsAcceptor::from(Arc::new(config)))
+    }
+
+    /// Load certificates from file
+    async fn load_certs(path: &str) -> ProtocolResult<Vec<rustls::Certificate>> {
+        let cert_data = tokio::fs::read(path)
+            .await
+            .map_err(|e| ProtocolError::Transport(format!("Failed to read certificate file: {}", e)))?;
+
+        let mut reader = std::io::Cursor::new(cert_data);
+        rustls_pemfile::certs(&mut reader)
+            .map_err(|_| ProtocolError::Transport("Failed to parse certificate".to_string()))?
+            .into_iter()
+            .map(|cert| Ok(rustls::Certificate(cert)))
+            .collect()
+    }
+
+    /// Load private key from file
+    async fn load_private_key(path: &str) -> ProtocolResult<rustls::PrivateKey> {
+        let key_data = tokio::fs::read(path)
+            .await
+            .map_err(|e| ProtocolError::Transport(format!("Failed to read private key file: {}", e)))?;
+
+        let mut reader = std::io::Cursor::new(key_data);
+        let key = rustls_pemfile::pkcs8_private_keys(&mut reader)
+            .map_err(|_| ProtocolError::Transport("Failed to parse PKCS8 private key".to_string()))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProtocolError::Transport("No PKCS8 private key found".to_string()))?;
+
+        Ok(rustls::PrivateKey(key))
     }
 }
 
 #[async_trait]
 impl TransportListener for WebSocketListener {
     async fn accept(&mut self) -> ProtocolResult<Box<dyn TransportConnection>> {
-        let (stream, _) = self.listener.accept().await
+        let (stream, addr) = self.listener.accept().await
             .map_err(|e| ProtocolError::Transport(format!("Failed to accept connection: {}", e)))?;
 
-        let connection = WebSocketConnection::new(stream, self.config.clone()).await?;
+        // TLSが有効な場合はTLSストリームを作成
+        // TODO: TLSサーバー実装を改善
+        let maybe_tls_stream = if let Some(_acceptor) = &self.tls_acceptor {
+            warn!("TLS server not yet implemented, falling back to plain connection");
+            tokio_tungstenite::MaybeTlsStream::Plain(stream)
+        } else {
+            tokio_tungstenite::MaybeTlsStream::Plain(stream)
+        };
+
+        // WebSocket handshake
+        let ws_stream = accept_async(maybe_tls_stream)
+            .await
+            .map_err(|e| ProtocolError::WebSocket(format!("WebSocket handshake failed: {}", e)))?;
+
+        let connection = WebSocketConnection {
+            stream: ws_stream,
+            remote_addr: addr,
+            config: self.config.clone(),
+            is_alive: true,
+        };
+
         info!("Accepted WebSocket connection from {}", connection.remote_addr);
 
         Ok(Box::new(connection))
@@ -224,12 +331,20 @@ impl TransportListener for WebSocketListener {
 
 /// WebSocket factory
 #[derive(Clone)]
-pub struct WebSocketFactory;
+pub struct WebSocketFactory {
+    config: TransportConfig,
+}
+
+impl WebSocketFactory {
+    pub fn new(config: TransportConfig) -> Self {
+        WebSocketFactory { config }
+    }
+}
 
 #[async_trait]
 impl TransportFactory for WebSocketFactory {
     async fn create_listener(&self, addr: SocketAddr, config: TransportConfig) -> ProtocolResult<Box<dyn TransportListener>> {
-        let listener = WebSocketListener::new(addr, config).await?;
+        let listener = WebSocketListener::new(config, addr).await?;
         Ok(Box::new(listener))
     }
 

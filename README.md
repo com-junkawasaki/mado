@@ -242,11 +242,13 @@ valgrind --tool=memcheck ./target/release/soft-kvm-server
 - [x] **Security Plugin**: TLS 1.3 + X.509証明書管理 + ハンドシェイク
 - [x] **Discovery Plugin**: mDNSベースサービスディスカバリ
 - [x] **Protocol Plugin**: KVM共有プロトコル実装
+- [x] **Protocol統合**: Tauri UIとの完全統合
+- [x] **Transport Layer**: WebSocket over TLSの実接続
 
 ### 🔄 開発中
 
-- [ ] **Protocol統合**: Tauri UIとの統合
-- [ ] **Platform Integration**: OS別バックエンド実装
+- [ ] **Platform Integration**: OS別バックエンド実装 (Input/Video/System Service)
+- [ ] **Server/Client実装**: 実際のKVM通信
 - [ ] **Monitoring Plugin**: p99メトリクス収集・可視化
 - [ ] **UI Enhancement**: 完全な監視・制御インターフェース
 

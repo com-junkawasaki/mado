@@ -52,6 +52,17 @@ pub trait TransportListener: Send + Sync {
     async fn close(&mut self) -> ProtocolResult<()>;
 }
 
+/// TLS configuration for transport
+#[derive(Debug, Clone)]
+pub struct TlsConfig {
+    pub enabled: bool,
+    pub certificate_path: Option<String>,
+    pub private_key_path: Option<String>,
+    pub ca_certificate_path: Option<String>,
+    pub accept_invalid_certs: bool,
+    pub accept_invalid_hostnames: bool,
+}
+
 /// Transport configuration
 #[derive(Debug, Clone)]
 pub struct TransportConfig {
@@ -60,6 +71,7 @@ pub struct TransportConfig {
     pub write_timeout: u64, // seconds
     pub buffer_size: usize,
     pub compression: bool,
+    pub tls: TlsConfig,
 }
 
 impl Default for TransportConfig {
@@ -70,6 +82,20 @@ impl Default for TransportConfig {
             write_timeout: 30,
             buffer_size: 64 * 1024, // 64KB
             compression: true,
+            tls: TlsConfig::default(),
+        }
+    }
+}
+
+impl Default for TlsConfig {
+    fn default() -> Self {
+        TlsConfig {
+            enabled: false,
+            certificate_path: None,
+            private_key_path: None,
+            ca_certificate_path: None,
+            accept_invalid_certs: false,
+            accept_invalid_hostnames: false,
         }
     }
 }
