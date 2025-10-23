@@ -21,6 +21,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, connect_async, connect_async_with_config, tungstenite::Message, MaybeTlsStream, Connector};
+use tokio_rustls::TlsAcceptor;
+use rustls::OwnedTrustAnchor;
 
 /// Dangerous TLS configuration for development
 mod dangerous {
@@ -79,11 +81,11 @@ impl WebSocketConnection {
         let url = url::Url::parse(&url)
             .map_err(|e| ProtocolError::Transport(format!("Invalid URL: {}", e)))?;
 
-        // TLSはURLスキームで制御（wss:// でTLS有効、ws:// で平文）
+        // For now, use the simple connect method
+        // TLS configuration will be handled by the URL scheme (wss://)
         let (ws_stream, _) = connect_async(url)
             .await
             .map_err(|e| ProtocolError::WebSocket(format!("Failed to connect WebSocket: {}", e)))?;
-        
 
         Ok(WebSocketConnection {
             stream: ws_stream,
@@ -101,7 +103,7 @@ impl TransportConnection for WebSocketConnection {
             return Err(ProtocolError::Transport("Connection is closed".to_string()));
         }
 
-        // Serialize message
+        // Serialize message using JSON
         let data = serde_json::to_string(&message)
             .map_err(|e| ProtocolError::Serialization(e))?;
 
@@ -114,8 +116,8 @@ impl TransportConnection for WebSocketConnection {
             )));
         }
 
-        // Send as WebSocket text message
-        let ws_message = Message::Text(data);
+        // Send as WebSocket binary message
+        let ws_message = Message::Binary(data.into_bytes());
         self.stream.send(ws_message).await
             .map_err(|e| ProtocolError::WebSocket(format!("Failed to send message: {}", e)))?;
 
@@ -134,17 +136,17 @@ impl TransportConnection for WebSocketConnection {
         match tokio::time::timeout(timeout_duration, self.stream.next()).await {
             Ok(Some(Ok(message))) => {
                 match message {
-                    Message::Text(text) => {
-                        // Deserialize message
-                        let protocol_message: ProtocolMessage = serde_json::from_str(&text)
+                    Message::Binary(data) => {
+                        // Deserialize message using JSON
+                        let protocol_message: ProtocolMessage = serde_json::from_slice(&data)
                             .map_err(|e| ProtocolError::Serialization(e))?;
 
                         debug!("Received message from {}", self.remote_addr);
                         Ok(Some(protocol_message))
                     }
-                    Message::Binary(data) => {
-                        // Handle binary messages if needed
-                        warn!("Received binary message from {}, ignoring", self.remote_addr);
+                    Message::Text(text) => {
+                        // Handle text messages if needed (for debugging)
+                        warn!("Received text message from {}, ignoring: {}", self.remote_addr, text);
                         Ok(None)
                     }
                     Message::Ping(_) => {
@@ -293,8 +295,9 @@ impl TransportListener for WebSocketListener {
             .map_err(|e| ProtocolError::Transport(format!("Failed to accept connection: {}", e)))?;
 
         // TLSが有効な場合はTLSストリームを作成
-        // TODO: TLSサーバー実装を改善
         let maybe_tls_stream = if let Some(_acceptor) = &self.tls_acceptor {
+            // TODO: Implement proper TLS server handshake
+            // For now, fall back to plain connection
             warn!("TLS server not yet implemented, falling back to plain connection");
             tokio_tungstenite::MaybeTlsStream::Plain(stream)
         } else {
@@ -313,7 +316,9 @@ impl TransportListener for WebSocketListener {
             is_alive: true,
         };
 
-        info!("Accepted WebSocket connection from {}", connection.remote_addr);
+        info!("Accepted WebSocket connection from {} (TLS: {})",
+              connection.remote_addr,
+              self.config.tls.enabled);
 
         Ok(Box::new(connection))
     }
@@ -361,7 +366,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_websocket_factory_creation() {
-        let factory = WebSocketFactory;
+        let factory = WebSocketFactory::new(TransportConfig::default());
         let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
         let config = TransportConfig::default();
 

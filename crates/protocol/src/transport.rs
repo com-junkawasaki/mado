@@ -18,6 +18,7 @@ use crate::{messages::ProtocolMessage, ProtocolResult};
 use async_trait::async_trait;
 use tracing::{debug, info, warn, error};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 /// Transport connection trait
@@ -37,6 +38,13 @@ pub trait TransportConnection: Send + Sync {
 
     /// Check if connection is alive
     fn is_alive(&self) -> bool;
+}
+
+/// Connection handle for managing connections
+pub struct ConnectionHandle {
+    pub remote_addr: SocketAddr,
+    pub sender: mpsc::UnboundedSender<ProtocolMessage>,
+    pub receiver: mpsc::UnboundedReceiver<ProtocolMessage>,
 }
 
 /// Transport listener trait
@@ -133,163 +141,269 @@ pub trait MessageHandler: Send + Sync {
 }
 
 /// Transport manager for handling multiple connections
-pub struct TransportManager<F, H> {
+pub struct TransportManager<F> {
     factory: F,
-    handler: H,
     config: TransportConfig,
-    connections: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<SocketAddr, Box<dyn TransportConnection>>>>,
+    connections: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<SocketAddr, mpsc::UnboundedSender<ProtocolMessage>>>>,
+    shutdown_sender: tokio::sync::broadcast::Sender<()>,
 }
 
-impl<F, H> TransportManager<F, H>
+impl<F> TransportManager<F>
 where
-    F: TransportFactory + Clone + 'static,
-    H: MessageHandler + Clone + 'static,
+    F: TransportFactory + Clone + Send + Sync + 'static,
 {
     /// Create a new transport manager
-    pub fn new(factory: F, handler: H, config: TransportConfig) -> Self {
+    pub fn new(factory: F, config: TransportConfig) -> Self {
+        let (shutdown_sender, _) = tokio::sync::broadcast::channel(1);
         TransportManager {
             factory,
-            handler,
             config,
             connections: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+            shutdown_sender,
         }
     }
 
     /// Start listening for connections
-    pub async fn listen(&self, addr: SocketAddr) -> ProtocolResult<()> {
+    pub async fn listen<H>(&self, addr: SocketAddr, mut handler: H) -> ProtocolResult<()>
+    where
+        H: MessageHandler + Send + Sync + Clone + 'static,
+    {
         let mut listener = self.factory.create_listener(addr, self.config.clone()).await?;
+        let local_addr = listener.local_addr();
 
-        info!("Transport manager listening on {}", addr);
+        info!("Transport manager listening on {}", local_addr.unwrap_or(addr));
 
-        loop {
-            match listener.accept().await {
-                Ok(mut connection) => {
-                    let remote_addr = connection.remote_addr()
-                        .ok_or_else(|| crate::ProtocolError::Transport("No remote address".to_string()))?;
+        let connections = Arc::clone(&self.connections);
+        let factory = self.factory.clone();
+        let config = self.config.clone();
+        let mut shutdown_receiver = self.shutdown_sender.subscribe();
 
-                    // Handle connection opened
-                    self.handler.clone().on_connection_opened(remote_addr).await?;
-
-                    // Store connection
-                    {
-                        let mut connections = self.connections.write().await;
-                        connections.insert(remote_addr, connection);
-                    }
-
-                    // Spawn connection handler
-                    let connections = self.connections.clone();
-                    let mut handler = self.handler.clone();
-
-                    tokio::spawn(async move {
-                        let (tx, mut rx) = mpsc::unbounded_channel();
-
-                        // Message processing loop
-                        loop {
-                            tokio::select! {
-                                // Receive message from connection
-                                result = async {
-                                    let connections = connections.read().await;
-                                    if let Some(connection) = connections.get(&remote_addr) {
-                                        // Note: This is a simplified implementation
-                                        // In practice, we'd need to make the connection clonable or use different approach
-                                        Ok(None)
-                                    } else {
-                                        Err(crate::ProtocolError::Transport("Connection not found".to_string()))
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    accept_result = listener.accept() => {
+                        match accept_result {
+                            Ok(mut connection) => {
+                                let remote_addr = match connection.remote_addr() {
+                                    Some(addr) => addr,
+                                    None => {
+                                        warn!("Connection without remote address");
+                                        continue;
                                     }
-                                } => {
-                                    match result {
-                                        Ok(Some(message)) => {
-                                            if let Err(e) = handler.handle_message(message, tx.clone()).await {
-                                                error!("Failed to handle message: {}", e);
+                                };
+
+                                // Create channels for this connection
+                                let (tx_to_connection, mut rx_to_connection) = mpsc::unbounded_channel::<ProtocolMessage>();
+                                let (tx_from_connection, rx_from_connection) = mpsc::unbounded_channel::<ProtocolMessage>();
+
+                                // Handle connection opened
+                                if let Err(e) = handler.on_connection_opened(remote_addr).await {
+                                    error!("Failed to handle connection opened: {}", e);
+                                    continue;
+                                }
+
+                                // Store sender for this connection
+                                let tx_for_storage = tx_from_connection.clone();
+                                {
+                                    let mut connections = connections.write().await;
+                                    connections.insert(remote_addr, tx_for_storage);
+                                }
+
+                                // Spawn connection reader
+                                let mut connection_reader = connection;
+                                let connections_clone = Arc::clone(&connections);
+                                let mut handler_clone = handler.clone();
+                                let mut shutdown_rx = shutdown_receiver.resubscribe();
+
+                                tokio::spawn(async move {
+                                    loop {
+                                        tokio::select! {
+                                            // Receive message from connection
+                                            receive_result = connection_reader.receive() => {
+                                                match receive_result {
+                                                    Ok(Some(message)) => {
+                                                        if let Err(e) = handler_clone.handle_message(message, tx_from_connection.clone()).await {
+                                                            error!("Failed to handle message: {}", e);
+                                                            break;
+                                                        }
+                                                    }
+                                                    Ok(None) => {
+                                                        // Connection closed
+                                                        break;
+                                                    }
+                                                    Err(e) => {
+                                                        error!("Connection receive error: {}", e);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            // Send message to connection
+                                            Some(message) = rx_to_connection.recv() => {
+                                                if let Err(e) = connection_reader.send(message).await {
+                                                    error!("Failed to send message: {}", e);
+                                                    break;
+                                                }
+                                            }
+
+                                            // Shutdown signal
+                                            _ = shutdown_rx.recv() => {
+                                                break;
                                             }
                                         }
-                                        Ok(None) => continue,
-                                        Err(e) => {
-                                            error!("Connection error: {}", e);
-                                            break;
-                                        }
                                     }
-                                }
 
-                                // Send message to connection
-                                Some(message) = rx.recv() => {
-                                    let mut connections = connections.write().await;
-                                    if let Some(connection) = connections.get_mut(&remote_addr) {
-                                        if let Err(e) = connection.send(message).await {
-                                            error!("Failed to send message: {}", e);
-                                        }
+                                    // Clean up connection
+                                    {
+                                        let mut connections = connections_clone.write().await;
+                                        connections.remove(&remote_addr);
                                     }
-                                }
+
+                                    if let Err(e) = handler_clone.on_connection_closed(remote_addr).await {
+                                        error!("Failed to handle connection closed: {}", e);
+                                    }
+
+                                    // Close connection
+                                    if let Err(e) = connection_reader.close().await {
+                                        error!("Failed to close connection: {}", e);
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                error!("Failed to accept connection: {}", e);
+                                break;
                             }
                         }
+                    }
 
-                        // Handle connection closed
-                        {
-                            let mut connections = connections.write().await;
-                            connections.remove(&remote_addr);
-                        }
-
-                        if let Err(e) = handler.on_connection_closed(remote_addr).await {
-                            error!("Failed to handle connection closed: {}", e);
-                        }
-                    });
-                }
-                Err(e) => {
-                    error!("Failed to accept connection: {}", e);
-                    break;
+                    _ = shutdown_receiver.recv() => {
+                        info!("Transport manager shutdown signal received");
+                        break;
+                    }
                 }
             }
-        }
+        });
 
         Ok(())
     }
 
     /// Connect to a remote address
-    pub async fn connect(&self, addr: SocketAddr) -> ProtocolResult<()> {
+    pub async fn connect<H>(&self, addr: SocketAddr, mut handler: H) -> ProtocolResult<mpsc::UnboundedReceiver<ProtocolMessage>>
+    where
+        H: MessageHandler + Send + Sync + Clone + 'static,
+    {
         let mut connection = self.factory.create_connection(addr, self.config.clone()).await?;
 
         // Handle connection opened
-        self.handler.clone().on_connection_opened(addr).await?;
+        handler.on_connection_opened(addr).await?;
 
-        // Store connection
+        // Create channels for this connection
+        let (tx_to_connection, mut rx_to_connection) = mpsc::unbounded_channel::<ProtocolMessage>();
+        let (tx_from_connection, rx_from_connection) = mpsc::unbounded_channel::<ProtocolMessage>();
+
+        // Store sender for this connection
+        let tx_for_storage = tx_from_connection.clone();
         {
             let mut connections = self.connections.write().await;
-            connections.insert(addr, connection);
+            connections.insert(addr, tx_for_storage);
         }
 
+        // Spawn connection handler
+        let connections_clone = Arc::clone(&self.connections);
+        let mut handler_clone = handler.clone();
+        let mut shutdown_rx = self.shutdown_sender.subscribe();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    // Receive message from connection
+                    receive_result = connection.receive() => {
+                        match receive_result {
+                            Ok(Some(message)) => {
+                                if let Err(e) = handler_clone.handle_message(message, tx_from_connection.clone()).await {
+                                    error!("Failed to handle message: {}", e);
+                                    break;
+                                }
+                            }
+                            Ok(None) => {
+                                // Connection closed
+                                break;
+                            }
+                            Err(e) => {
+                                error!("Connection receive error: {}", e);
+                                break;
+                            }
+                        }
+                    }
+
+                    // Send message to connection
+                    Some(message) = rx_to_connection.recv() => {
+                        if let Err(e) = connection.send(message).await {
+                            error!("Failed to send message: {}", e);
+                            break;
+                        }
+                    }
+
+                    // Shutdown signal
+                    _ = shutdown_rx.recv() => {
+                        break;
+                    }
+                }
+            }
+
+            // Clean up connection
+            {
+                let mut connections = connections_clone.write().await;
+                connections.remove(&addr);
+            }
+
+            if let Err(e) = handler_clone.on_connection_closed(addr).await {
+                error!("Failed to handle connection closed: {}", e);
+            }
+
+            // Close connection
+            if let Err(e) = connection.close().await {
+                error!("Failed to close connection: {}", e);
+            }
+        });
+
         info!("Connected to {}", addr);
-        Ok(())
+        Ok(rx_from_connection)
     }
 
     /// Send message to specific address
     pub async fn send_to(&self, addr: SocketAddr, message: ProtocolMessage) -> ProtocolResult<()> {
-        let mut connections = self.connections.write().await;
-        if let Some(connection) = connections.get_mut(&addr) {
-            connection.send(message).await
+        let connections = self.connections.read().await;
+        if let Some(sender) = connections.get(&addr) {
+            sender.send(message)
+                .map_err(|e| crate::ProtocolError::Transport(format!("Failed to send message: {}", e)))?;
         } else {
-            Err(crate::ProtocolError::Transport(format!("No connection to {}", addr)))
+            return Err(crate::ProtocolError::Transport(format!("No connection to {}", addr)));
         }
+        Ok(())
     }
 
     /// Broadcast message to all connections
     pub async fn broadcast(&self, message: ProtocolMessage) -> ProtocolResult<()> {
         let connections = self.connections.read().await;
-        for connection in connections.values() {
-            // Note: This requires connection to be clonable or different approach
-            // For now, this is a placeholder
-            warn!("Broadcast not fully implemented");
+        let mut send_errors = Vec::new();
+
+        for (addr, sender) in connections.iter() {
+            if let Err(e) = sender.send(message.clone()) {
+                send_errors.push(format!("{}: {}", addr, e));
+            }
         }
+
+        if !send_errors.is_empty() {
+            return Err(crate::ProtocolError::Transport(format!("Broadcast errors: {:?}", send_errors)));
+        }
+
         Ok(())
     }
 
     /// Close all connections
     pub async fn shutdown(&self) -> ProtocolResult<()> {
-        let mut connections = self.connections.write().await;
-        for (addr, mut connection) in connections.drain() {
-            if let Err(e) = connection.close().await {
-                error!("Failed to close connection to {}: {}", addr, e);
-            }
-        }
+        let _ = self.shutdown_sender.send(());
         Ok(())
     }
 
