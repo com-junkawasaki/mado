@@ -26,10 +26,6 @@ pub mod input;
 pub mod video;
 pub mod system;
 
-use crate::input::{InputCapture, PlatformInputCapture};
-use crate::video::{VideoCapture, PlatformVideoCapture};
-use crate::system::{SystemService, PlatformSystemService};
-
 /// Platform result type
 pub type PlatformResult<T> = Result<T, PlatformError>;
 
@@ -56,10 +52,27 @@ pub enum PlatformError {
 }
 
 /// Platform manager for handling platform-specific operations
-pub struct PlatformManager {
-    input_capture: Option<Box<dyn InputCapture>>,
-    video_capture: Option<Box<dyn VideoCapture>>,
-    system_service: Option<Box<dyn SystemService>>,
+#[derive(Debug)]
+pub enum PlatformManager {
+    #[cfg(target_os = "linux")]
+    Linux {
+        input_capture: Option<input::LinuxInputCapture>,
+        video_capture: Option<video::LinuxVideoCapture>,
+        system_service: Option<system::LinuxSystemService>,
+    },
+    #[cfg(target_os = "macos")]
+    MacOs {
+        input_capture: Option<input::MacOsInputCapture>,
+        video_capture: Option<video::MacOsVideoCapture>,
+        system_service: Option<system::MacOsSystemService>,
+    },
+    #[cfg(target_os = "windows")]
+    Windows {
+        input_capture: Option<input::WindowsInputCapture>,
+        video_capture: Option<video::WindowsVideoCapture>,
+        system_service: Option<system::WindowsSystemService>,
+    },
+    Unsupported,
 }
 
 impl PlatformManager {
@@ -67,161 +80,56 @@ impl PlatformManager {
     pub fn new() -> PlatformResult<Self> {
         info!("Initializing platform manager for {}", std::env::consts::OS);
 
-        let input_capture = Self::create_input_capture()?;
-        let video_capture = Self::create_video_capture()?;
-        let system_service = Self::create_system_service()?;
-
-        Ok(PlatformManager {
-            input_capture: Some(input_capture),
-            video_capture: Some(video_capture),
-            system_service: Some(system_service),
-        })
-    }
-
-    /// Create platform-specific input capture
-    fn create_input_capture() -> PlatformResult<Box<dyn InputCapture>> {
         match std::env::consts::OS {
             "linux" => {
                 #[cfg(target_os = "linux")]
                 {
-                    Ok(Box::new(input::LinuxInputCapture::new()?))
+                    Ok(PlatformManager::Linux {
+                        input_capture: Some(input::LinuxInputCapture::new()?),
+                        video_capture: Some(video::LinuxVideoCapture::new()?),
+                        system_service: Some(system::LinuxSystemService::new()?),
+                    })
                 }
                 #[cfg(not(target_os = "linux"))]
                 {
-                    Err(PlatformError::UnsupportedPlatform("Linux input capture not available".to_string()))
+                    Ok(PlatformManager::Unsupported)
                 }
             }
             "macos" => {
                 #[cfg(target_os = "macos")]
                 {
-                    Ok(Box::new(input::MacOsInputCapture::new()?))
+                    Ok(PlatformManager::MacOs {
+                        input_capture: Some(input::MacOsInputCapture::new()?),
+                        video_capture: Some(video::MacOsVideoCapture::new()?),
+                        system_service: Some(system::MacOsSystemService::new()?),
+                    })
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
-                    Err(PlatformError::UnsupportedPlatform("macOS input capture not available".to_string()))
+                    Ok(PlatformManager::Unsupported)
                 }
             }
             "windows" => {
                 #[cfg(target_os = "windows")]
                 {
-                    Ok(Box::new(input::WindowsInputCapture::new()?))
+                    Ok(PlatformManager::Windows {
+                        input_capture: Some(input::WindowsInputCapture::new()?),
+                        video_capture: Some(video::WindowsVideoCapture::new()?),
+                        system_service: Some(system::WindowsSystemService::new()?),
+                    })
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
-                    Err(PlatformError::UnsupportedPlatform("Windows input capture not available".to_string()))
+                    Ok(PlatformManager::Unsupported)
                 }
             }
-            _ => Err(PlatformError::UnsupportedPlatform(format!("Unsupported OS: {}", std::env::consts::OS))),
+            _ => Ok(PlatformManager::Unsupported),
         }
-    }
-
-    /// Create platform-specific video capture
-    fn create_video_capture() -> PlatformResult<Box<dyn VideoCapture>> {
-        match std::env::consts::OS {
-            "linux" => {
-                #[cfg(target_os = "linux")]
-                {
-                    Ok(Box::new(video::LinuxVideoCapture::new()?))
-                }
-                #[cfg(not(target_os = "linux"))]
-                {
-                    Err(PlatformError::UnsupportedPlatform("Linux video capture not available".to_string()))
-                }
-            }
-            "macos" => {
-                #[cfg(target_os = "macos")]
-                {
-                    Ok(Box::new(video::MacOsVideoCapture::new()?))
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    Err(PlatformError::UnsupportedPlatform("macOS video capture not available".to_string()))
-                }
-            }
-            "windows" => {
-                #[cfg(target_os = "windows")]
-                {
-                    Ok(Box::new(video::WindowsVideoCapture::new()?))
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    Err(PlatformError::UnsupportedPlatform("Windows video capture not available".to_string()))
-                }
-            }
-            _ => Err(PlatformError::UnsupportedPlatform(format!("Unsupported OS: {}", std::env::consts::OS))),
-        }
-    }
-
-    /// Create platform-specific system service
-    fn create_system_service() -> PlatformResult<Box<dyn SystemService>> {
-        match std::env::consts::OS {
-            "linux" => {
-                #[cfg(target_os = "linux")]
-                {
-                    Ok(Box::new(system::LinuxSystemService::new()?))
-                }
-                #[cfg(not(target_os = "linux"))]
-                {
-                    Err(PlatformError::UnsupportedPlatform("Linux system service not available".to_string()))
-                }
-            }
-            "macos" => {
-                #[cfg(target_os = "macos")]
-                {
-                    Ok(Box::new(system::MacOsSystemService::new()?))
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    Err(PlatformError::UnsupportedPlatform("macOS system service not available".to_string()))
-                }
-            }
-            "windows" => {
-                #[cfg(target_os = "windows")]
-                {
-                    Ok(Box::new(system::WindowsSystemService::new()?))
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    Err(PlatformError::UnsupportedPlatform("Windows system service not available".to_string()))
-                }
-            }
-            _ => Err(PlatformError::UnsupportedPlatform(format!("Unsupported OS: {}", std::env::consts::OS))),
-        }
-    }
-
-    /// Get input capture interface
-    pub fn input_capture(&self) -> Option<&dyn InputCapture> {
-        self.input_capture.as_ref().map(|ic| ic.as_ref())
-    }
-
-    /// Get input capture interface mutably
-    pub fn input_capture_mut(&mut self) -> Option<&mut dyn InputCapture> {
-        self.input_capture.as_mut().map(|ic| ic.as_mut())
-    }
-
-    /// Get video capture interface
-    pub fn video_capture(&self) -> Option<&dyn VideoCapture> {
-        self.video_capture.as_ref().map(|vc| vc.as_ref())
-    }
-
-    /// Get video capture interface mutably
-    pub fn video_capture_mut(&mut self) -> Option<&mut dyn VideoCapture> {
-        self.video_capture.as_mut().map(|vc| vc.as_mut())
-    }
-
-    /// Get system service interface
-    pub fn system_service(&self) -> Option<&dyn SystemService> {
-        self.system_service.as_ref().map(|ss| ss.as_ref())
-    }
-
-    /// Get system service interface mutably
-    pub fn system_service_mut(&mut self) -> Option<&mut dyn SystemService> {
-        self.system_service.as_mut().map(|ss| ss.as_mut())
     }
 
     /// Check if platform is supported
     pub fn is_supported(&self) -> bool {
-        self.input_capture.is_some() && self.video_capture.is_some() && self.system_service.is_some()
+        !matches!(self, PlatformManager::Unsupported)
     }
 
     /// Get platform information
@@ -231,6 +139,138 @@ impl PlatformManager {
             arch: std::env::consts::ARCH.to_string(),
             family: std::env::consts::FAMILY.to_string(),
             is_supported: self.is_supported(),
+        }
+    }
+
+    /// Start input capture
+    pub async fn start_input_capture(&mut self, config: soft_kvm_core::InputConfig) -> PlatformResult<()> {
+        match self {
+            #[cfg(target_os = "linux")]
+            PlatformManager::Linux { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.start_capture(config).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "macos")]
+            PlatformManager::MacOs { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.start_capture(config).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "windows")]
+            PlatformManager::Windows { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.start_capture(config).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            PlatformManager::Unsupported => {
+                Err(PlatformError::UnsupportedPlatform("Platform not supported".to_string()))
+            }
+        }
+    }
+
+    /// Stop input capture
+    pub async fn stop_input_capture(&mut self) -> PlatformResult<()> {
+        match self {
+            #[cfg(target_os = "linux")]
+            PlatformManager::Linux { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.stop_capture().await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "macos")]
+            PlatformManager::MacOs { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.stop_capture().await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "windows")]
+            PlatformManager::Windows { input_capture, .. } => {
+                if let Some(ic) = input_capture {
+                    ic.stop_capture().await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Input capture not available".to_string()))
+                }
+            }
+            PlatformManager::Unsupported => {
+                Err(PlatformError::UnsupportedPlatform("Platform not supported".to_string()))
+            }
+        }
+    }
+
+    /// Start video capture
+    pub async fn start_video_capture(&mut self, config: soft_kvm_core::VideoConfig) -> PlatformResult<()> {
+        match self {
+            #[cfg(target_os = "linux")]
+            PlatformManager::Linux { video_capture, .. } => {
+                if let Some(vc) = video_capture {
+                    vc.start_capture(config).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "macos")]
+            PlatformManager::MacOs { video_capture, .. } => {
+                if let Some(vc) = video_capture {
+                    vc.start_capture(config).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "windows")]
+            PlatformManager::Windows { video_capture, .. } => {
+                if let Some(vc) = video_capture {
+                    vc.start_capture(config).await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            PlatformManager::Unsupported => {
+                Err(PlatformError::UnsupportedPlatform("Platform not supported".to_string()))
+            }
+        }
+    }
+
+    /// Stop video capture
+    pub async fn stop_video_capture(&mut self) -> PlatformResult<()> {
+        match self {
+            #[cfg(target_os = "linux")]
+            PlatformManager::Linux { video_capture, .. } => {
+                if let Some(vc) = video_capture {
+                    vc.stop_capture().await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "macos")]
+            PlatformManager::MacOs { video_capture, .. } => {
+                if let Some(vc) = video_capture {
+                    vc.stop_capture().await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            #[cfg(target_os = "windows")]
+            PlatformManager::Windows { video_capture, .. } => {
+                if let Some(vc) = video_capture {
+                    vc.stop_capture().await
+                } else {
+                    Err(PlatformError::UnsupportedPlatform("Video capture not available".to_string()))
+                }
+            }
+            PlatformManager::Unsupported => {
+                Err(PlatformError::UnsupportedPlatform("Platform not supported".to_string()))
+            }
         }
     }
 }

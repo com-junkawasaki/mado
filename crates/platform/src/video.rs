@@ -16,29 +16,8 @@
 
 use crate::{PlatformError, PlatformResult};
 use soft_kvm_core::*;
-use async_trait::async_trait;
+use tracing::info;
 
-/// Video capture trait for platform abstraction
-#[async_trait]
-pub trait VideoCapture: Send + Sync {
-    /// Start video capture
-    async fn start_capture(&mut self, config: VideoConfig) -> PlatformResult<()>;
-
-    /// Stop video capture
-    async fn stop_capture(&mut self) -> PlatformResult<()>;
-
-    /// Check if video capture is active
-    fn is_capturing(&self) -> bool;
-
-    /// Capture a frame
-    async fn capture_frame(&mut self) -> PlatformResult<VideoFrame>;
-
-    /// Get supported resolutions
-    fn get_supported_resolutions(&self) -> Vec<VideoResolution>;
-
-    /// Get video device information
-    fn get_device_info(&self) -> VideoDeviceInfo;
-}
 
 /// Video device information
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -58,25 +37,14 @@ pub struct DisplayInfo {
     pub is_primary: bool,
 }
 
-#[cfg(target_os = "linux")]
-mod linux;
+
 #[cfg(target_os = "linux")]
 pub use linux::*;
-
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::*;
-
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-pub use windows::*;
-
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
 
+    #[derive(Debug)]
     pub struct LinuxVideoCapture {
         is_capturing: bool,
         device_info: VideoDeviceInfo,
@@ -121,9 +89,9 @@ mod linux {
         }
     }
 
-    #[async_trait]
-    impl VideoCapture for LinuxVideoCapture {
-        async fn start_capture(&mut self, config: VideoConfig) -> PlatformResult<()> {
+    impl LinuxVideoCapture {
+        /// Start video capture
+        pub async fn start_capture(&mut self, _config: VideoConfig) -> PlatformResult<()> {
             if !self.device_info.has_permissions {
                 return Err(PlatformError::PermissionDenied("No permission to capture video".to_string()));
             }
@@ -134,17 +102,20 @@ mod linux {
             Ok(())
         }
 
-        async fn stop_capture(&mut self) -> PlatformResult<()> {
+        /// Stop video capture
+        pub async fn stop_capture(&mut self) -> PlatformResult<()> {
             self.is_capturing = false;
             info!("Linux video capture stopped");
             Ok(())
         }
 
-        fn is_capturing(&self) -> bool {
+        /// Check if video capture is active
+        pub fn is_capturing(&self) -> bool {
             self.is_capturing
         }
 
-        async fn capture_frame(&mut self) -> PlatformResult<VideoFrame> {
+        /// Capture a frame
+        pub async fn capture_frame(&mut self) -> PlatformResult<VideoFrame> {
             if !self.is_capturing {
                 return Err(PlatformError::VideoCapture("Video capture not active".to_string()));
             }
@@ -161,7 +132,8 @@ mod linux {
             Ok(frame)
         }
 
-        fn get_supported_resolutions(&self) -> Vec<VideoResolution> {
+        /// Get supported resolutions
+        pub fn get_supported_resolutions(&self) -> Vec<VideoResolution> {
             vec![
                 VideoResolution { width: 1920, height: 1080 },
                 VideoResolution { width: 1280, height: 720 },
@@ -169,16 +141,20 @@ mod linux {
             ]
         }
 
-        fn get_device_info(&self) -> VideoDeviceInfo {
+        /// Get video device information
+        pub fn get_device_info(&self) -> VideoDeviceInfo {
             self.device_info.clone()
         }
     }
 }
 
 #[cfg(target_os = "macos")]
+pub use macos::*;
+#[cfg(target_os = "macos")]
 mod macos {
     use super::*;
 
+    #[derive(Debug)]
     pub struct MacOsVideoCapture {
         is_capturing: bool,
         device_info: VideoDeviceInfo,
@@ -223,9 +199,9 @@ mod macos {
         }
     }
 
-    #[async_trait]
-    impl VideoCapture for MacOsVideoCapture {
-        async fn start_capture(&mut self, config: VideoConfig) -> PlatformResult<()> {
+    impl MacOsVideoCapture {
+        /// Start video capture
+        pub async fn start_capture(&mut self, _config: VideoConfig) -> PlatformResult<()> {
             if !self.device_info.has_permissions {
                 return Err(PlatformError::PermissionDenied("Screen recording permission required".to_string()));
             }
@@ -236,17 +212,20 @@ mod macos {
             Ok(())
         }
 
-        async fn stop_capture(&mut self) -> PlatformResult<()> {
+        /// Stop video capture
+        pub async fn stop_capture(&mut self) -> PlatformResult<()> {
             self.is_capturing = false;
             info!("macOS video capture stopped");
             Ok(())
         }
 
-        fn is_capturing(&self) -> bool {
+        /// Check if video capture is active
+        pub fn is_capturing(&self) -> bool {
             self.is_capturing
         }
 
-        async fn capture_frame(&mut self) -> PlatformResult<VideoFrame> {
+        /// Capture a frame
+        pub async fn capture_frame(&mut self) -> PlatformResult<VideoFrame> {
             if !self.is_capturing {
                 return Err(PlatformError::VideoCapture("Video capture not active".to_string()));
             }
@@ -263,7 +242,8 @@ mod macos {
             Ok(frame)
         }
 
-        fn get_supported_resolutions(&self) -> Vec<VideoResolution> {
+        /// Get supported resolutions
+        pub fn get_supported_resolutions(&self) -> Vec<VideoResolution> {
             vec![
                 VideoResolution { width: 2560, height: 1600 },
                 VideoResolution { width: 1920, height: 1080 },
@@ -271,16 +251,20 @@ mod macos {
             ]
         }
 
-        fn get_device_info(&self) -> VideoDeviceInfo {
+        /// Get video device information
+        pub fn get_device_info(&self) -> VideoDeviceInfo {
             self.device_info.clone()
         }
     }
 }
 
 #[cfg(target_os = "windows")]
+pub use windows::*;
+#[cfg(target_os = "windows")]
 mod windows {
     use super::*;
 
+    #[derive(Debug)]
     pub struct WindowsVideoCapture {
         is_capturing: bool,
         device_info: VideoDeviceInfo,
@@ -319,26 +303,29 @@ mod windows {
         }
     }
 
-    #[async_trait]
-    impl VideoCapture for WindowsVideoCapture {
-        async fn start_capture(&mut self, config: VideoConfig) -> PlatformResult<()> {
+    impl WindowsVideoCapture {
+        /// Start video capture
+        pub async fn start_capture(&mut self, _config: VideoConfig) -> PlatformResult<()> {
             // TODO: Initialize Windows Desktop Duplication API
             self.is_capturing = true;
             info!("Windows video capture started");
             Ok(())
         }
 
-        async fn stop_capture(&mut self) -> PlatformResult<()> {
+        /// Stop video capture
+        pub async fn stop_capture(&mut self) -> PlatformResult<()> {
             self.is_capturing = false;
             info!("Windows video capture stopped");
             Ok(())
         }
 
-        fn is_capturing(&self) -> bool {
+        /// Check if video capture is active
+        pub fn is_capturing(&self) -> bool {
             self.is_capturing
         }
 
-        async fn capture_frame(&mut self) -> PlatformResult<VideoFrame> {
+        /// Capture a frame
+        pub async fn capture_frame(&mut self) -> PlatformResult<VideoFrame> {
             if !self.is_capturing {
                 return Err(PlatformError::VideoCapture("Video capture not active".to_string()));
             }
@@ -355,7 +342,8 @@ mod windows {
             Ok(frame)
         }
 
-        fn get_supported_resolutions(&self) -> Vec<VideoResolution> {
+        /// Get supported resolutions
+        pub fn get_supported_resolutions(&self) -> Vec<VideoResolution> {
             vec![
                 VideoResolution { width: 1920, height: 1080 },
                 VideoResolution { width: 1280, height: 720 },
@@ -363,7 +351,8 @@ mod windows {
             ]
         }
 
-        fn get_device_info(&self) -> VideoDeviceInfo {
+        /// Get video device information
+        pub fn get_device_info(&self) -> VideoDeviceInfo {
             self.device_info.clone()
         }
     }

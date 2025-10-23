@@ -82,7 +82,7 @@
 
       // OS統合層
       platform: {
-        hash: "sha256:platform_v1",
+        hash: "sha256:platform_v1_complete",
         dependencies: ["core"],
         description: "OS別バックエンド統合",
         submodules: {

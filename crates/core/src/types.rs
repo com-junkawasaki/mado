@@ -98,27 +98,76 @@ pub struct Metrics {
     pub input_latency_p99: f64,
 }
 
+/// Input configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputConfig {
+    pub enable_keyboard: bool,
+    pub enable_mouse: bool,
+    pub keyboard_layout: String,
+    pub mouse_sensitivity: f64,
+}
+
+/// Video configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoConfig {
+    pub resolution: VideoResolution,
+    pub fps: u32,
+    pub quality: VideoQuality,
+    pub compression: bool,
+}
+
+/// Keyboard event types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum KeyboardEvent {
+    KeyPress { key_code: u32, modifiers: u32 },
+    KeyRelease { key_code: u32, modifiers: u32 },
+}
+
+/// Mouse event types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MouseEvent {
+    MouseMove { x: i32, y: i32, relative: bool },
+    MouseButtonPress { button: MouseButton },
+    MouseButtonRelease { button: MouseButton },
+    MouseScroll { delta_x: i32, delta_y: i32 },
+}
+
+/// Mouse button types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Button4,
+    Button5,
+}
+
+/// Video frame data
+#[derive(Debug, Clone)]
+pub struct VideoFrame {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub format: VideoFormat,
+    pub timestamp: u64,
+}
+
+/// Video format types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VideoFormat {
+    Rgba,
+    Bgra,
+    Yuv420,
+    Jpeg,
+    H264,
+}
+
 /// Configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub video: VideoConfig,
     pub input: InputConfig,
     pub network: NetworkConfig,
-}
-
-/// Video configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VideoConfig {
-    pub resolution: String,
-    pub fps: u32,
-    pub quality: String,
-}
-
-/// Input configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputConfig {
-    pub keyboard_enabled: bool,
-    pub mouse_enabled: bool,
 }
 
 /// Network configuration

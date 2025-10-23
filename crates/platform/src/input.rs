@@ -16,31 +16,7 @@
 
 use crate::{PlatformError, PlatformResult};
 use soft_kvm_core::*;
-use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-
-/// Input capture trait for platform abstraction
-#[async_trait]
-pub trait InputCapture: Send + Sync {
-    /// Start input capture
-    async fn start_capture(&mut self, config: InputConfig) -> PlatformResult<()>;
-
-    /// Stop input capture
-    async fn stop_capture(&mut self) -> PlatformResult<()>;
-
-    /// Check if input capture is active
-    fn is_capturing(&self) -> bool;
-
-    /// Send keyboard event
-    async fn send_keyboard_event(&mut self, event: KeyboardEvent) -> PlatformResult<()>;
-
-    /// Send mouse event
-    async fn send_mouse_event(&mut self, event: MouseEvent) -> PlatformResult<()>;
-
-    /// Get input device information
-    fn get_device_info(&self) -> InputDeviceInfo;
-}
+use tracing::{debug, info};
 
 /// Input device information
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -51,21 +27,9 @@ pub struct InputDeviceInfo {
     pub platform_specific_info: serde_json::Value,
 }
 
-#[cfg(target_os = "linux")]
-mod linux;
+
 #[cfg(target_os = "linux")]
 pub use linux::*;
-
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::*;
-
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-pub use windows::*;
-
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
@@ -73,6 +37,7 @@ mod linux {
     use std::fs::File;
     use std::os::unix::fs::FileExt;
 
+    #[derive(Debug)]
     pub struct LinuxInputCapture {
         keyboard_device: Option<File>,
         mouse_device: Option<File>,
@@ -119,11 +84,9 @@ mod linux {
             // TODO: Enumerate actual mouse devices using evdev
             vec!["/dev/input/event2".to_string(), "/dev/input/event3".to_string()]
         }
-    }
 
-    #[async_trait]
-    impl InputCapture for LinuxInputCapture {
-        async fn start_capture(&mut self, config: InputConfig) -> PlatformResult<()> {
+        /// Start input capture
+        pub async fn start_capture(&mut self, _config: InputConfig) -> PlatformResult<()> {
             if !self.device_info.has_permissions {
                 return Err(PlatformError::PermissionDenied("No permission to access input devices".to_string()));
             }
@@ -134,7 +97,8 @@ mod linux {
             Ok(())
         }
 
-        async fn stop_capture(&mut self) -> PlatformResult<()> {
+        /// Stop input capture
+        pub async fn stop_capture(&mut self) -> PlatformResult<()> {
             self.is_capturing = false;
             self.keyboard_device = None;
             self.mouse_device = None;
@@ -142,40 +106,47 @@ mod linux {
             Ok(())
         }
 
-        fn is_capturing(&self) -> bool {
+        /// Check if input capture is active
+        pub fn is_capturing(&self) -> bool {
             self.is_capturing
         }
 
-        async fn send_keyboard_event(&mut self, event: KeyboardEvent) -> PlatformResult<()> {
+        /// Send keyboard event
+        pub async fn send_keyboard_event(&mut self, _event: KeyboardEvent) -> PlatformResult<()> {
             if !self.is_capturing {
                 return Err(PlatformError::InputCapture("Input capture not active".to_string()));
             }
 
             // TODO: Send keyboard event via uinput
-            debug!("Linux keyboard event: {:?}", event);
+            debug!("Linux keyboard event: {:?}", _event);
             Ok(())
         }
 
-        async fn send_mouse_event(&mut self, event: MouseEvent) -> PlatformResult<()> {
+        /// Send mouse event
+        pub async fn send_mouse_event(&mut self, _event: MouseEvent) -> PlatformResult<()> {
             if !self.is_capturing {
                 return Err(PlatformError::InputCapture("Input capture not active".to_string()));
             }
 
             // TODO: Send mouse event via uinput
-            debug!("Linux mouse event: {:?}", event);
+            debug!("Linux mouse event: {:?}", _event);
             Ok(())
         }
 
-        fn get_device_info(&self) -> InputDeviceInfo {
+        /// Get input device information
+        pub fn get_device_info(&self) -> InputDeviceInfo {
             self.device_info.clone()
         }
     }
 }
 
 #[cfg(target_os = "macos")]
+pub use macos::*;
+#[cfg(target_os = "macos")]
 mod macos {
     use super::*;
 
+    #[derive(Debug)]
     pub struct MacOsInputCapture {
         is_capturing: bool,
         device_info: InputDeviceInfo,
@@ -200,55 +171,63 @@ mod macos {
         }
     }
 
-    #[async_trait]
-    impl InputCapture for MacOsInputCapture {
-        async fn start_capture(&mut self, config: InputConfig) -> PlatformResult<()> {
+    impl MacOsInputCapture {
+        /// Start input capture
+        pub async fn start_capture(&mut self, _config: InputConfig) -> PlatformResult<()> {
             // TODO: Initialize macOS input monitoring
             self.is_capturing = true;
             info!("macOS input capture started");
             Ok(())
         }
 
-        async fn stop_capture(&mut self) -> PlatformResult<()> {
+        /// Stop input capture
+        pub async fn stop_capture(&mut self) -> PlatformResult<()> {
             self.is_capturing = false;
             info!("macOS input capture stopped");
             Ok(())
         }
 
-        fn is_capturing(&self) -> bool {
+        /// Check if input capture is active
+        pub fn is_capturing(&self) -> bool {
             self.is_capturing
         }
 
-        async fn send_keyboard_event(&mut self, event: KeyboardEvent) -> PlatformResult<()> {
+        /// Send keyboard event
+        pub async fn send_keyboard_event(&mut self, _event: KeyboardEvent) -> PlatformResult<()> {
             if !self.is_capturing {
                 return Err(PlatformError::InputCapture("Input capture not active".to_string()));
             }
 
             // TODO: Send keyboard event via CoreGraphics
-            debug!("macOS keyboard event: {:?}", event);
+            debug!("macOS keyboard event: {:?}", _event);
             Ok(())
         }
 
-        async fn send_mouse_event(&mut self, event: MouseEvent) -> PlatformResult<()> {
+        /// Send mouse event
+        pub async fn send_mouse_event(&mut self, _event: MouseEvent) -> PlatformResult<()> {
             if !self.is_capturing {
                 return Err(PlatformError::InputCapture("Input capture not active".to_string()));
             }
 
             // TODO: Send mouse event via CoreGraphics
-            debug!("macOS mouse event: {:?}", event);
+            debug!("macOS mouse event: {:?}", _event);
             Ok(())
         }
 
-        fn get_device_info(&self) -> InputDeviceInfo {
+        /// Get input device information
+        pub fn get_device_info(&self) -> InputDeviceInfo {
             self.device_info.clone()
         }
     }
 }
 
 #[cfg(target_os = "windows")]
+pub use windows::*;
+#[cfg(target_os = "windows")]
 mod windows {
     use super::*;
 
+    #[derive(Debug)]
     pub struct WindowsInputCapture {
         is_capturing: bool,
         device_info: InputDeviceInfo,
@@ -273,46 +252,51 @@ mod windows {
         }
     }
 
-    #[async_trait]
-    impl InputCapture for WindowsInputCapture {
-        async fn start_capture(&mut self, config: InputConfig) -> PlatformResult<()> {
+    impl WindowsInputCapture {
+        /// Start input capture
+        pub async fn start_capture(&mut self, _config: InputConfig) -> PlatformResult<()> {
             // TODO: Initialize Windows raw input
             self.is_capturing = true;
             info!("Windows input capture started");
             Ok(())
         }
 
-        async fn stop_capture(&mut self) -> PlatformResult<()> {
+        /// Stop input capture
+        pub async fn stop_capture(&mut self) -> PlatformResult<()> {
             self.is_capturing = false;
             info!("Windows input capture stopped");
             Ok(())
         }
 
-        fn is_capturing(&self) -> bool {
+        /// Check if input capture is active
+        pub fn is_capturing(&self) -> bool {
             self.is_capturing
         }
 
-        async fn send_keyboard_event(&mut self, event: KeyboardEvent) -> PlatformResult<()> {
+        /// Send keyboard event
+        pub async fn send_keyboard_event(&mut self, _event: KeyboardEvent) -> PlatformResult<()> {
             if !self.is_capturing {
                 return Err(PlatformError::InputCapture("Input capture not active".to_string()));
             }
 
             // TODO: Send keyboard event via SendInput
-            debug!("Windows keyboard event: {:?}", event);
+            debug!("Windows keyboard event: {:?}", _event);
             Ok(())
         }
 
-        async fn send_mouse_event(&mut self, event: MouseEvent) -> PlatformResult<()> {
+        /// Send mouse event
+        pub async fn send_mouse_event(&mut self, _event: MouseEvent) -> PlatformResult<()> {
             if !self.is_capturing {
                 return Err(PlatformError::InputCapture("Input capture not active".to_string()));
             }
 
             // TODO: Send mouse event via SendInput
-            debug!("Windows mouse event: {:?}", event);
+            debug!("Windows mouse event: {:?}", _event);
             Ok(())
         }
 
-        fn get_device_info(&self) -> InputDeviceInfo {
+        /// Get input device information
+        pub fn get_device_info(&self) -> InputDeviceInfo {
             self.device_info.clone()
         }
     }

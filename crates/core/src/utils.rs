@@ -89,17 +89,20 @@ pub fn validate_resolution(resolution: &str) -> bool {
 /// Get default video configuration
 pub fn default_video_config() -> crate::VideoConfig {
     crate::VideoConfig {
-        resolution: "1920x1080".to_string(),
+        resolution: crate::VideoResolution::fhd(),
         fps: 30,
-        quality: "balanced".to_string(),
+        quality: crate::VideoQuality::balanced(),
+        compression: true,
     }
 }
 
 /// Get default input configuration
 pub fn default_input_config() -> crate::InputConfig {
     crate::InputConfig {
-        keyboard_enabled: true,
-        mouse_enabled: true,
+        enable_keyboard: true,
+        enable_mouse: true,
+        keyboard_layout: "us".to_string(),
+        mouse_sensitivity: 1.0,
     }
 }
 

@@ -15,35 +15,8 @@
 //! Platform-specific system service implementations
 
 use crate::{PlatformError, PlatformResult};
-use async_trait::async_trait;
+use tracing::info;
 
-/// System service trait for platform abstraction
-#[async_trait]
-pub trait SystemService: Send + Sync {
-    /// Install the service
-    async fn install_service(&self, config: ServiceConfig) -> PlatformResult<()>;
-
-    /// Uninstall the service
-    async fn uninstall_service(&self) -> PlatformResult<()>;
-
-    /// Start the service
-    async fn start_service(&self) -> PlatformResult<()>;
-
-    /// Stop the service
-    async fn stop_service(&self) -> PlatformResult<()>;
-
-    /// Restart the service
-    async fn restart_service(&self) -> PlatformResult<()>;
-
-    /// Check service status
-    async fn get_service_status(&self) -> PlatformResult<ServiceStatus>;
-
-    /// Enable service auto-start
-    async fn enable_auto_start(&self) -> PlatformResult<()>;
-
-    /// Disable service auto-start
-    async fn disable_auto_start(&self) -> PlatformResult<()>;
-}
 
 /// Service configuration
 #[derive(Debug, Clone)]
@@ -68,26 +41,15 @@ pub struct ServiceStatus {
     pub status_message: String,
 }
 
-#[cfg(target_os = "linux")]
-mod linux;
+
 #[cfg(target_os = "linux")]
 pub use linux::*;
-
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(target_os = "macos")]
-pub use macos::*;
-
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-pub use windows::*;
-
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
     use std::process::Command;
 
+    #[derive(Debug)]
     pub struct LinuxSystemService;
 
     impl LinuxSystemService {
@@ -96,9 +58,9 @@ mod linux {
         }
     }
 
-    #[async_trait]
-    impl SystemService for LinuxSystemService {
-        async fn install_service(&self, config: ServiceConfig) -> PlatformResult<()> {
+    impl LinuxSystemService {
+        /// Install the service
+        pub async fn install_service(&self, config: ServiceConfig) -> PlatformResult<()> {
             // Create systemd service file
             let service_content = format!(
                 r#"[Unit]
@@ -143,7 +105,8 @@ WantedBy=multi-user.target
             Ok(())
         }
 
-        async fn uninstall_service(&self) -> PlatformResult<()> {
+        /// Uninstall the service
+        pub async fn uninstall_service(&self) -> PlatformResult<()> {
             // TODO: Get service name from somewhere
             let service_name = "soft-kvm"; // Placeholder
 
@@ -162,28 +125,32 @@ WantedBy=multi-user.target
             Ok(())
         }
 
-        async fn start_service(&self) -> PlatformResult<()> {
+        /// Start the service
+        pub async fn start_service(&self) -> PlatformResult<()> {
             let service_name = "soft-kvm"; // Placeholder
             Self::run_systemctl(&["start", service_name])
                 .map_err(|e| PlatformError::SystemService(format!("Failed to start service: {}", e)))?;
             Ok(())
         }
 
-        async fn stop_service(&self) -> PlatformResult<()> {
+        /// Stop the service
+        pub async fn stop_service(&self) -> PlatformResult<()> {
             let service_name = "soft-kvm"; // Placeholder
             Self::run_systemctl(&["stop", service_name])
                 .map_err(|e| PlatformError::SystemService(format!("Failed to stop service: {}", e)))?;
             Ok(())
         }
 
-        async fn restart_service(&self) -> PlatformResult<()> {
+        /// Restart the service
+        pub async fn restart_service(&self) -> PlatformResult<()> {
             let service_name = "soft-kvm"; // Placeholder
             Self::run_systemctl(&["restart", service_name])
                 .map_err(|e| PlatformError::SystemService(format!("Failed to restart service: {}", e)))?;
             Ok(())
         }
 
-        async fn get_service_status(&self) -> PlatformResult<ServiceStatus> {
+        /// Check service status
+        pub async fn get_service_status(&self) -> PlatformResult<ServiceStatus> {
             let service_name = "soft-kvm"; // Placeholder
 
             match Self::run_systemctl(&["is-active", service_name]) {
@@ -204,14 +171,16 @@ WantedBy=multi-user.target
             }
         }
 
-        async fn enable_auto_start(&self) -> PlatformResult<()> {
+        /// Enable service auto-start
+        pub async fn enable_auto_start(&self) -> PlatformResult<()> {
             let service_name = "soft-kvm"; // Placeholder
             Self::run_systemctl(&["enable", service_name])
                 .map_err(|e| PlatformError::SystemService(format!("Failed to enable auto-start: {}", e)))?;
             Ok(())
         }
 
-        async fn disable_auto_start(&self) -> PlatformResult<()> {
+        /// Disable service auto-start
+        pub async fn disable_auto_start(&self) -> PlatformResult<()> {
             let service_name = "soft-kvm"; // Placeholder
             Self::run_systemctl(&["disable", service_name])
                 .map_err(|e| PlatformError::SystemService(format!("Failed to disable auto-start: {}", e)))?;
@@ -238,46 +207,52 @@ WantedBy=multi-user.target
 }
 
 #[cfg(target_os = "macos")]
+pub use macos::*;
+#[cfg(target_os = "macos")]
 mod macos {
     use super::*;
 
+    #[derive(Debug)]
     pub struct MacOsSystemService;
 
     impl MacOsSystemService {
         pub fn new() -> PlatformResult<Self> {
             Ok(MacOsSystemService)
         }
-    }
 
-    #[async_trait]
-    impl SystemService for MacOsSystemService {
-        async fn install_service(&self, config: ServiceConfig) -> PlatformResult<()> {
+        /// Install the service
+        pub async fn install_service(&self, _config: ServiceConfig) -> PlatformResult<()> {
             // TODO: Create launchd plist file
-            info!("macOS service {} installation not implemented", config.service_name);
+            info!("macOS service installation not implemented");
             Ok(())
         }
 
-        async fn uninstall_service(&self) -> PlatformResult<()> {
+        /// Uninstall the service
+        pub async fn uninstall_service(&self) -> PlatformResult<()> {
             info!("macOS service uninstallation not implemented");
             Ok(())
         }
 
-        async fn start_service(&self) -> PlatformResult<()> {
+        /// Start the service
+        pub async fn start_service(&self) -> PlatformResult<()> {
             info!("macOS service start not implemented");
             Ok(())
         }
 
-        async fn stop_service(&self) -> PlatformResult<()> {
+        /// Stop the service
+        pub async fn stop_service(&self) -> PlatformResult<()> {
             info!("macOS service stop not implemented");
             Ok(())
         }
 
-        async fn restart_service(&self) -> PlatformResult<()> {
+        /// Restart the service
+        pub async fn restart_service(&self) -> PlatformResult<()> {
             info!("macOS service restart not implemented");
             Ok(())
         }
 
-        async fn get_service_status(&self) -> PlatformResult<ServiceStatus> {
+        /// Check service status
+        pub async fn get_service_status(&self) -> PlatformResult<ServiceStatus> {
             Ok(ServiceStatus {
                 is_installed: false,
                 is_running: false,
@@ -287,12 +262,14 @@ mod macos {
             })
         }
 
-        async fn enable_auto_start(&self) -> PlatformResult<()> {
+        /// Enable service auto-start
+        pub async fn enable_auto_start(&self) -> PlatformResult<()> {
             info!("macOS auto-start enable not implemented");
             Ok(())
         }
 
-        async fn disable_auto_start(&self) -> PlatformResult<()> {
+        /// Disable service auto-start
+        pub async fn disable_auto_start(&self) -> PlatformResult<()> {
             info!("macOS auto-start disable not implemented");
             Ok(())
         }
@@ -300,9 +277,12 @@ mod macos {
 }
 
 #[cfg(target_os = "windows")]
+pub use windows::*;
+#[cfg(target_os = "windows")]
 mod windows {
     use super::*;
 
+    #[derive(Debug)]
     pub struct WindowsSystemService;
 
     impl WindowsSystemService {
@@ -311,35 +291,40 @@ mod windows {
         }
     }
 
-    #[async_trait]
-    impl SystemService for WindowsSystemService {
-        async fn install_service(&self, config: ServiceConfig) -> PlatformResult<()> {
+    impl WindowsSystemService {
+        /// Install the service
+        pub async fn install_service(&self, _config: ServiceConfig) -> PlatformResult<()> {
             // TODO: Install Windows service
-            info!("Windows service {} installation not implemented", config.service_name);
+            info!("Windows service installation not implemented");
             Ok(())
         }
 
-        async fn uninstall_service(&self) -> PlatformResult<()> {
+        /// Uninstall the service
+        pub async fn uninstall_service(&self) -> PlatformResult<()> {
             info!("Windows service uninstallation not implemented");
             Ok(())
         }
 
-        async fn start_service(&self) -> PlatformResult<()> {
+        /// Start the service
+        pub async fn start_service(&self) -> PlatformResult<()> {
             info!("Windows service start not implemented");
             Ok(())
         }
 
-        async fn stop_service(&self) -> PlatformResult<()> {
+        /// Stop the service
+        pub async fn stop_service(&self) -> PlatformResult<()> {
             info!("Windows service stop not implemented");
             Ok(())
         }
 
-        async fn restart_service(&self) -> PlatformResult<()> {
+        /// Restart the service
+        pub async fn restart_service(&self) -> PlatformResult<()> {
             info!("Windows service restart not implemented");
             Ok(())
         }
 
-        async fn get_service_status(&self) -> PlatformResult<ServiceStatus> {
+        /// Check service status
+        pub async fn get_service_status(&self) -> PlatformResult<ServiceStatus> {
             Ok(ServiceStatus {
                 is_installed: false,
                 is_running: false,
@@ -349,12 +334,14 @@ mod windows {
             })
         }
 
-        async fn enable_auto_start(&self) -> PlatformResult<()> {
+        /// Enable service auto-start
+        pub async fn enable_auto_start(&self) -> PlatformResult<()> {
             info!("Windows auto-start enable not implemented");
             Ok(())
         }
 
-        async fn disable_auto_start(&self) -> PlatformResult<()> {
+        /// Disable service auto-start
+        pub async fn disable_auto_start(&self) -> PlatformResult<()> {
             info!("Windows auto-start disable not implemented");
             Ok(())
         }
