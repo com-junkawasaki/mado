@@ -256,10 +256,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             get_security_status,
             list_certificates,
         ])
-        .setup(|_app| {
+        .setup(|app, _app_handle| {
             // Initialize security state
             let state = Arc::new(RwLock::new(SecurityState::default()));
-            _app.manage(state);
+            app.manage(state);
             Ok(())
         })
         .build()

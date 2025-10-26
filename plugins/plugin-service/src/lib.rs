@@ -311,10 +311,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             stop_service,
             get_service_status,
         ])
-        .setup(|_app| {
+        .setup(|app, _app_handle| {
             // Initialize service state
             let state = Arc::new(RwLock::new(ServiceState::default()));
-            _app.manage(state);
+            app.manage(state);
             Ok(())
         })
         .build()

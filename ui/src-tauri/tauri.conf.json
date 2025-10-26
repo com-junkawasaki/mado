@@ -1,74 +1,61 @@
 {
-  "package": {
-    "productName": "Soft KVM",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "bundle": {
-      "identifier": "com.soft-kvm.ui",
-      "icon": []
+  "productName": "Soft KVM",
+  "version": "0.1.0",
+  "identifier": "com.soft-kvm.ui",
+  "plugins": {
+    "soft-kvm-protocol": {
+      "version": "1.0.0",
+      "maxMessageSize": 1048576,
+      "heartbeatInterval": 30,
+      "sessionTimeout": 300,
+      "compressionEnabled": true
     },
-    "security": {
-      "csp": null
-    },
-    "windows": [
-      {
-        "title": "Soft KVM",
-        "width": 1200,
-        "height": 800
+    "soft-kvm-input": {
+      "keyboardEnabled": true,
+      "mouseEnabled": true,
+      "toggleHotkey": {
+        "modifiers": ["ctrl", "shift"],
+        "key": "k"
       }
-    ],
-    "plugins": {
-      "soft-kvm-protocol": {
-        "version": "1.0.0",
-        "maxMessageSize": 1048576,
-        "heartbeatInterval": 30,
-        "sessionTimeout": 300,
-        "compressionEnabled": true
-      },
-      "soft-kvm-input": {
-        "keyboardEnabled": true,
-        "mouseEnabled": true,
-        "toggleHotkey": {
-          "modifiers": ["ctrl", "shift"],
-          "key": "k"
-        }
-      },
-      "soft-kvm-service": {
-        "systemd": {
-          "enabled": true,
-          "unitFile": "/etc/systemd/system/soft-kvm.service"
-        },
-        "launchd": {
-          "enabled": true,
-          "plistFile": "/Library/LaunchDaemons/com.soft-kvm.server.plist"
-        },
-        "windowsService": {
-          "enabled": true,
-          "serviceName": "Soft KVM Service"
-        }
-      },
-      "soft-kvm-security": {
-        "tls": {
-          "enabled": true,
-          "certificatePath": "certs/server.crt",
-          "privateKeyPath": "certs/server.key",
-          "caCertificatePath": "certs/ca.crt"
-        },
-        "authentication": {
-          "enabled": true,
-          "method": "certificate"
-        }
-      },
-      "soft-kvm-discovery": {
+    },
+    "soft-kvm-service": {
+      "systemd": {
         "enabled": true,
-        "serviceName": "_soft-kvm._tcp",
-        "port": 8080,
-        "txtRecords": {
-          "version": "1.0.0",
-          "type": "server"
-        }
+        "unitFile": "/etc/systemd/system/soft-kvm.service"
+      },
+      "launchd": {
+        "enabled": true,
+        "plistFile": "/Library/LaunchDaemons/com.soft-kvm.server.plist"
+      },
+      "windowsService": {
+        "enabled": true,
+        "serviceName": "Soft KVM Service"
+      }
+    },
+    "soft-kvm-security": {
+      "tls": {
+        "enabled": true,
+        "certificatePath": "certs/server.crt",
+        "privateKeyPath": "certs/server.key",
+        "caCertificatePath": "certs/ca.crt"
+      },
+      "authentication": {
+        "enabled": true,
+        "method": "certificate"
+      }
+    },
+    "soft-kvm-discovery": {
+      "enabled": true,
+      "serviceName": "_soft-kvm._tcp",
+      "port": 8080,
+      "txtRecords": {
+        "version": "1.0.0",
+        "type": "server"
       }
     }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
   }
 }

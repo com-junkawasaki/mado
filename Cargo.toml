@@ -10,6 +10,7 @@ members = [
     "plugins/plugin-service",
     "plugins/plugin-security",
     "ui/src-tauri",
+    "ui",
 ]
 resolver = "2"
 
@@ -72,5 +73,5 @@ prost = "0.12"
 tonic = "0.10"
 
 # Tauri UI
-tauri = { version = "1.6", features = [] }
-tauri-build = { version = "1.5", features = [] }
+tauri = { version = "2.0", features = [] }
+tauri-build = { version = "2.0", features = [] }

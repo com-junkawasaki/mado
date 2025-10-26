@@ -348,10 +348,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             toggle_input_capture,
             set_toggle_hotkey,
         ])
-        .setup(|_app| {
+        .setup(|app, _app_handle| {
             // Initialize capture state
             let state = Arc::new(RwLock::new(InputCaptureState::default()));
-            _app.manage(state);
+            app.manage(state);
             Ok(())
         })
         .build()

@@ -210,10 +210,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             get_available_services,
             get_discovery_status,
         ])
-        .setup(|_app| {
+        .setup(|app, _app_handle| {
             // Initialize discovery state
             let state = Arc::new(RwLock::new(DiscoveryState::default()));
-            _app.manage(state);
+            app.manage(state);
             Ok(())
         })
         .build()

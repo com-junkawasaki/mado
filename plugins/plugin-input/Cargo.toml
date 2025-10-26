@@ -9,7 +9,7 @@ description = "Soft KVM Input Plugin"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json.workspace = true
-tauri = { version = "1.6", features = ["shell-open"] }
+tauri = { version = "2.0" }
 tokio.workspace = true
 lazy_static = "1.4"
 

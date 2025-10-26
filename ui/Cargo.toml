@@ -14,6 +14,18 @@ serde_json.workspace = true
 tauri.workspace = true
 tokio.workspace = true
 
+# Plugin dependencies
+soft-kvm-plugin-input = { path = "../plugins/plugin-input" }
+soft-kvm-plugin-protocol = { path = "../plugins/plugin-protocol" }
+soft-kvm-plugin-service = { path = "../plugins/plugin-service" }
+soft-kvm-plugin-security = { path = "../plugins/plugin-security" }
+soft-kvm-plugin-discovery = { path = "../plugins/plugin-discovery" }
+
+# Internal crates
+soft-kvm-core = { path = "../crates/core" }
+soft-kvm-discovery = { path = "../crates/discovery" }
+soft-kvm-protocol = { path = "../crates/protocol" }
+
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT remove this

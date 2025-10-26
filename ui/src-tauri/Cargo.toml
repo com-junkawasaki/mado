@@ -16,8 +16,10 @@ tokio.workspace = true
 
 # Soft KVM plugins
 soft-kvm-plugin-input = { path = "../../plugins/plugin-input" }
+soft-kvm-plugin-protocol = { path = "../../plugins/plugin-protocol" }
 soft-kvm-plugin-service = { path = "../../plugins/plugin-service" }
 soft-kvm-plugin-security = { path = "../../plugins/plugin-security" }
+soft-kvm-plugin-discovery = { path = "../../plugins/plugin-discovery" }
 
 # Internal crates
 soft-kvm-core = { path = "../../crates/core" }
