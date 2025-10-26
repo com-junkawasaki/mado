@@ -60,22 +60,21 @@ story.jsonnet
 ### ビルド
 
 ```bash
-# ワークスペース全体をビルド
+# プラグインアーキテクチャをビルド
 cargo build --release --workspace
 
-# 個別クレートをビルド
-cargo build -p soft-kvm-server
-cargo build -p soft-kvm-client
+# UIアプリケーションをビルド
+cargo build -p soft-kvm-ui
 ```
 
 ### 実行
 
 ```bash
-# サーバー起動
-./target/release/soft-kvm-server
+# Tauri UIアプリケーションを起動
+cargo tauri dev
 
-# クライアント起動
-./target/release/soft-kvm-client --server <server-name>
+# 本番ビルド
+cargo tauri build
 ```
 
 ## 🔧 セットアップ
@@ -234,23 +233,22 @@ valgrind --tool=memcheck ./target/release/soft-kvm-server
 
 ### ✅ 完了済み (v0.1.0-alpha)
 
-- [x] **Cargo Workspace セットアップ**: モノレポ構造
-- [x] **Core Crate**: 共通型定義とユーティリティ
-- [x] **Tauri UI**: プラグイン統合アーキテクチャ
+- [x] **プラグインアーキテクチャ完全移行**: モノリシックからプラグイン指向アーキテクチャへ
+- [x] **Tauri UI統合**: 全プラグインとの完全統合
 - [x] **Input Plugin**: キーボード/マウス入力処理 + バリデーション + トグルAPI
-- [x] **Service Plugin**: systemd/launchd/Windows Service管理
+- [x] **Protocol Plugin**: KVM共有プロトコル実装 + WebSocket over TLS
 - [x] **Security Plugin**: TLS 1.3 + X.509証明書管理 + ハンドシェイク
+- [x] **Service Plugin**: systemd/launchd/Windows Service管理
 - [x] **Discovery Plugin**: mDNSベースサービスディスカバリ
-- [x] **Protocol Plugin**: KVM共有プロトコル実装
-- [x] **Protocol統合**: Tauri UIとの完全統合
-- [x] **Transport Layer**: WebSocket over TLSの実接続
+- [x] **Plugin統合テスト**: プラグイン間連携の完全テスト
+- [x] **Core Crate**: 共通型定義とユーティリティ
 
-### 🔄 開発中
+### 🔄 次の開発フェーズ
 
-- [ ] **Platform Integration**: OS別バックエンド実装 (Input/Video/System Service)
-- [ ] **Server/Client実装**: 実際のKVM通信
+- [ ] **Video Plugin**: FFmpeg/ハードウェアエンコーディング実装
 - [ ] **Monitoring Plugin**: p99メトリクス収集・可視化
 - [ ] **UI Enhancement**: 完全な監視・制御インターフェース
+- [ ] **Performance Optimization**: p99目標達成のための最適化
 
 ### 📋 今後の計画
 

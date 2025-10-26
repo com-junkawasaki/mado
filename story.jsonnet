@@ -131,20 +131,6 @@
         files: ["monitoring/src/lib.rs", "monitoring/grafana/dashboard.json"]
       },
 
-      // 実行可能バイナリ
-      server: {
-        hash: "sha256:server_v1_complete",
-        dependencies: ["core", "discovery", "security", "protocol", "video", "input", "platform", "service", "monitoring"],
-        description: "KVMサーバー実装 - クライアント接続受付, セッション管理, Inputイベント転送機能",
-        files: ["server/src/lib.rs", "server/Cargo.toml", "server/src/config.rs", "server/src/handler.rs", "server/src/manager.rs"]
-      },
-
-      client: {
-        hash: "sha256:client_v1_complete",
-        dependencies: ["core", "discovery", "security", "protocol", "platform", "monitoring"],
-        description: "KVMクライアント実装 - サーバー接続, 認証, Inputイベント送信機能",
-        files: ["client/src/lib.rs", "client/Cargo.toml", "client/src/config.rs", "client/src/handler.rs", "client/src/manager.rs"]
-      },
 
       // 統合テスト
       integration_test: {
@@ -175,25 +161,23 @@
     build_order: [
       "core",
       "discovery",
-      "security",
       "protocol",
-      "video",
-      "input",
       "platform",
       "service",
-      "monitoring",
-      "server",
-      "client",
-      "integration_test",
+      "plugin-discovery",
+      "plugin-input",
+      "plugin-protocol",
+      "plugin-service",
+      "plugin-security",
       "tauri_plugin_test",
-      "actual_kvm_communication"
+      "integration_test"
     ],
 
     // クリティカルパス分析
     critical_paths: {
-      latency: ["client", "protocol", "server", "platform", "video"],
-      security: ["client", "security", "protocol", "server"],
-      discovery: ["client", "discovery", "server"]
+      latency: ["plugin-protocol", "platform", "plugin-input"],
+      security: ["plugin-security", "plugin-protocol"],
+      discovery: ["plugin-discovery"]
     },
 
     // 品質ゲート
@@ -210,11 +194,10 @@
     completion_status: {
       // 完了済みコア機能
       completed: {
-        core_communication: true,      // WebSocket over TLS通信インフラ
+        plugin_architecture: true,     // プラグインアーキテクチャ完全移行
+        tauri_integration: true,       // Tauri UI統合完了
+        plugin_testing: true,          // プラグイン統合テスト完了
         cross_platform: true,          // Linux/macOS/Windows対応
-        message_protocol: true,        // Hello/Auth/Heartbeat/Inputイベント
-        tauri_integration: true,       // UI統合完了
-        end_to_end_testing: true,      // エンドツーエンド通信テスト
         workspace_build: true,         // 全ワークスペースビルド成功
       },
 
