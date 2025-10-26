@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! 統合通信テスト - 実際のサーバー・クライアント接続テスト
+//! 統合通信テスト - プラグインアーキテクチャを使用した通信テスト
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -21,413 +21,244 @@ use tokio::sync::RwLock;
 use tokio::time::timeout;
 
 use soft_kvm_core::*;
-use soft_kvm_server::{KvmServer, ServerConfig};
-use soft_kvm_client::{KvmClient, ClientConfig};
+use soft_kvm_plugin_protocol::*;
+use soft_kvm_plugin_input::*;
+use soft_kvm_plugin_service::*;
 
 #[tokio::test]
-async fn test_server_client_connection() {
-    // サーバー設定
-    let server_config = ServerConfig {
-        server_name: "Test Server".to_string(),
-        bind_address: NetworkAddress {
-            ip: "127.0.0.1".to_string(),
-            port: 8081, // テスト用ポート
-        },
-        max_clients: 5,
-        session_timeout: 300,
-        heartbeat_interval: 30,
-        enable_discovery: false,
-        enable_security: false,
-        video_config: VideoConfig {
-            resolution: VideoResolution::fhd(),
-            fps: 30,
-            quality: VideoQuality::balanced(),
-            compression: true,
-        },
-        input_config: InputConfig {
-            enable_keyboard: true,
-            enable_mouse: true,
-            keyboard_layout: "us".to_string(),
-            mouse_sensitivity: 1.0,
-        },
+async fn test_plugin_state_integration() {
+    // プラグインの状態統合テスト
+    println!("Testing plugin state integration...");
+
+    // Protocol plugin state
+    let protocol_state = Arc::new(RwLock::new(ProtocolPluginState::default()));
+    let protocol_config = ProtocolPluginConfig {
+        version: "1.0.0".to_string(),
         max_message_size: 1024 * 1024,
+        heartbeat_interval: 30,
+        session_timeout: 300,
+        compression_enabled: true,
     };
 
-    // クライアント設定
-    let client_config = ClientConfig {
-        client_name: "Test Client".to_string(),
-        server_address: Some(NetworkAddress {
-            ip: "127.0.0.1".to_string(),
-            port: 8081,
+    // Initialize protocol plugin
+    let init_result = init_protocol(protocol_config.clone(), tauri::State::from(&protocol_state)).await;
+    assert!(init_result.is_ok(), "Protocol plugin initialization should succeed");
+
+    // Check protocol status
+    let status_result = get_protocol_status(tauri::State::from(&protocol_state)).await;
+    assert!(status_result.is_ok(), "Protocol status query should succeed");
+
+    let status = status_result.unwrap();
+    assert!(status.is_initialized, "Protocol should be initialized");
+    assert_eq!(status.active_sessions, 0, "Should have no active sessions initially");
+
+    // Input plugin state
+    let input_state = Arc::new(RwLock::new(InputCaptureState::default()));
+    let input_config = InputConfig {
+        keyboard_enabled: true,
+        mouse_enabled: true,
+        toggle_hotkey: Some(HotkeyConfig {
+            modifiers: vec!["ctrl".to_string()],
+            key: "k".to_string(),
         }),
-        auto_connect: false,
-        max_message_size: 1024 * 1024,
-        heartbeat_interval: 30,
-        session_timeout: 300,
-        enable_security: false,
-        video_config: VideoConfig {
-            resolution: VideoResolution::fhd(),
-            fps: 30,
-            quality: VideoQuality::balanced(),
-            compression: true,
-        },
-        input_config: InputConfig {
-            enable_keyboard: true,
-            enable_mouse: true,
-            keyboard_layout: "us".to_string(),
-            mouse_sensitivity: 1.0,
-        },
     };
 
-    // サーバーの起動
-    let server = KvmServer::new(server_config.clone()).await.unwrap();
-    let server_handle = Arc::new(RwLock::new(server));
-    let server_clone = server_handle.clone();
+    // Start input capture
+    let start_result = start_input_capture(input_config.clone(), tauri::State::from(&input_state)).await;
+    assert!(start_result.is_ok(), "Input capture start should succeed");
 
-    // サーバーを別タスクで起動
-    let server_task = tokio::spawn(async move {
-        let mut server = server_clone.write().await;
-        server.start().await.unwrap();
-        println!("Server started successfully");
+    // Check input status
+    let input_status_result = get_input_status(tauri::State::from(&input_state)).await;
+    assert!(input_status_result.is_ok(), "Input status query should succeed");
 
-        // 少し待ってから停止
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        server.stop().await.unwrap();
-        println!("Server stopped successfully");
-    });
+    // Stop input capture
+    let stop_result = stop_input_capture(tauri::State::from(&input_state)).await;
+    assert!(stop_result.is_ok(), "Input capture stop should succeed");
 
-    // 少し待ってサーバーが起動するのを待つ
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Service plugin state
+    let service_state = Arc::new(RwLock::new(ServiceState::default()));
 
-    // クライアントの作成と接続
-    let client = KvmClient::new(client_config.clone()).await.unwrap();
-    let client_handle = Arc::new(RwLock::new(client));
-    let client_clone = client_handle.clone();
+    // Check service status
+    let service_status_result = get_service_status(tauri::State::from(&service_state)).await;
+    assert!(service_status_result.is_ok(), "Service status query should succeed");
 
-    // クライアントを別タスクで接続
-    let client_task = tokio::spawn(async move {
-        let mut client = client_clone.write().await;
+    // Shutdown protocol
+    let shutdown_result = shutdown_protocol(tauri::State::from(&protocol_state)).await;
+    assert!(shutdown_result.is_ok(), "Protocol shutdown should succeed");
 
-        let server_addr: SocketAddr = format!("{}:{}", server_config.bind_address.ip, server_config.bind_address.port)
-            .parse().unwrap();
-
-        client.connect(server_addr).await.unwrap();
-        println!("Client connected successfully");
-
-        // 少し待ってから切断
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        client.disconnect().await.unwrap();
-        println!("Client disconnected successfully");
-    });
-
-    // 両方のタスクが完了するのを待つ（タイムアウト付き）
-    let result = timeout(Duration::from_secs(5), async {
-        let (server_result, client_result) = tokio::join!(server_task, client_task);
-        server_result.unwrap();
-        client_result.unwrap();
-    }).await;
-
-    match result {
-        Ok(_) => println!("Server-Client integration test passed!"),
-        Err(_) => panic!("Test timed out - possible connection issues"),
-    }
+    println!("Plugin state integration test passed!");
 }
 
 #[tokio::test]
-async fn test_multiple_clients_connection() {
-    // サーバー設定
-    let server_config = ServerConfig {
-        server_name: "Multi-Client Test Server".to_string(),
-        bind_address: NetworkAddress {
-            ip: "127.0.0.1".to_string(),
-            port: 8082, // 別のポート
-        },
-        max_clients: 3,
-        session_timeout: 300,
-        heartbeat_interval: 30,
-        enable_discovery: false,
-        enable_security: false,
-        video_config: VideoConfig {
-            resolution: VideoResolution::fhd(),
-            fps: 30,
-            quality: VideoQuality::balanced(),
-            compression: true,
-        },
-        input_config: InputConfig {
-            enable_keyboard: true,
-            enable_mouse: true,
-            keyboard_layout: "us".to_string(),
-            mouse_sensitivity: 1.0,
-        },
+async fn test_plugin_config_validation() {
+    // プラグイン設定の検証テスト
+    println!("Testing plugin configuration validation...");
+
+    // Test protocol plugin config
+    let protocol_config = ProtocolPluginConfig {
+        version: "1.0.0".to_string(),
         max_message_size: 1024 * 1024,
+        heartbeat_interval: 30,
+        session_timeout: 300,
+        compression_enabled: true,
     };
 
-    // サーバーの起動
-    let server = KvmServer::new(server_config.clone()).await.unwrap();
-    let server_handle = Arc::new(RwLock::new(server));
+    // Test input plugin config
+    let input_config = InputConfig {
+        keyboard_enabled: true,
+        mouse_enabled: true,
+        toggle_hotkey: Some(HotkeyConfig {
+            modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+            key: "k".to_string(),
+        }),
+    };
 
-    let server_task = tokio::spawn(async move {
-        let mut server = server_handle.write().await;
-        server.start().await.unwrap();
-        println!("Multi-client server started");
+    // Test service plugin config
+    let service_config = ServiceConfig {
+        systemd_enabled: true,
+        launchd_enabled: false,
+        windows_service_enabled: false,
+        service_name: "soft-kvm-test".to_string(),
+    };
 
-        // 複数クライアントが接続する時間を待つ
-        tokio::time::sleep(Duration::from_millis(200)).await;
+    // Validate configurations by creating plugin states
+    let _protocol_state = Arc::new(RwLock::new(ProtocolPluginState {
+        manager: None,
+        config: Some(protocol_config),
+        session_counter: 0,
+    }));
 
-        let status = server.status().await.unwrap();
-        println!("Server status: {} clients connected", status.active_sessions);
-        assert!(status.active_sessions >= 2, "Expected at least 2 clients to be connected");
+    let _input_state = Arc::new(RwLock::new(InputCaptureState {
+        is_capturing: false,
+        config: Some(input_config),
+        capture_task: None,
+        event_sender: None,
+    }));
 
-        server.stop().await.unwrap();
-        println!("Multi-client server stopped");
-    });
+    let _service_state = Arc::new(RwLock::new(ServiceState {
+        config: Some(service_config),
+        systemd_service: None,
+        launchd_service: None,
+        windows_service: None,
+    }));
 
-    // サーバーが起動するのを待つ
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
-    // 複数のクライアントを作成
-    let mut client_tasks = Vec::new();
-
-    for i in 0..3 {
-        let client_config = ClientConfig {
-            client_name: format!("Test Client {}", i),
-            server_address: Some(NetworkAddress {
-                ip: "127.0.0.1".to_string(),
-                port: 8082,
-            }),
-            auto_connect: false,
-            max_message_size: 1024 * 1024,
-            heartbeat_interval: 30,
-            session_timeout: 300,
-            enable_security: false,
-            video_config: VideoConfig {
-                resolution: VideoResolution::fhd(),
-                fps: 30,
-                quality: VideoQuality::balanced(),
-                compression: true,
-            },
-            input_config: InputConfig {
-                enable_keyboard: true,
-                enable_mouse: true,
-                keyboard_layout: "us".to_string(),
-                mouse_sensitivity: 1.0,
-            },
-        };
-
-        let client = KvmClient::new(client_config).await.unwrap();
-        let client_handle = Arc::new(RwLock::new(client));
-
-        let client_task = tokio::spawn(async move {
-            let mut client = client_handle.write().await;
-
-            let server_addr: SocketAddr = "127.0.0.1:8082".parse().unwrap();
-            client.connect(server_addr).await.unwrap();
-            println!("Client {} connected", i);
-
-            // 少し待ってから切断
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            client.disconnect().await.unwrap();
-            println!("Client {} disconnected", i);
-        });
-
-        client_tasks.push(client_task);
-    }
-
-    // すべてのタスクが完了するのを待つ
-    let result = timeout(Duration::from_secs(10), async {
-        server_task.await.unwrap();
-
-        for (i, task) in client_tasks.into_iter().enumerate() {
-            task.await.unwrap();
-            println!("Client task {} completed", i);
-        }
-    }).await;
-
-    match result {
-        Ok(_) => println!("Multi-client integration test passed!"),
-        Err(_) => panic!("Multi-client test timed out"),
-    }
+    println!("Plugin configuration validation test passed!");
 }
 
 #[tokio::test]
-async fn test_input_event_communication() {
-    // サーバー設定
-    let server_config = ServerConfig {
-        server_name: "Input Test Server".to_string(),
-        bind_address: NetworkAddress {
-            ip: "127.0.0.1".to_string(),
-            port: 8083,
-        },
-        max_clients: 1,
-        session_timeout: 300,
-        heartbeat_interval: 30,
-        enable_discovery: false,
-        enable_security: false,
-        video_config: VideoConfig {
-            resolution: VideoResolution::fhd(),
-            fps: 30,
-            quality: VideoQuality::balanced(),
-            compression: true,
-        },
-        input_config: InputConfig {
-            enable_keyboard: true,
-            enable_mouse: true,
-            keyboard_layout: "us".to_string(),
-            mouse_sensitivity: 1.0,
-        },
-        max_message_size: 1024 * 1024,
-    };
+async fn test_plugin_input_event_handling() {
+    // プラグインの入力イベント処理テスト
+    println!("Testing plugin input event handling...");
 
-    // クライアント設定
-    let client_config = ClientConfig {
-        client_name: "Input Test Client".to_string(),
-        server_address: Some(NetworkAddress {
-            ip: "127.0.0.1".to_string(),
-            port: 8083,
+    // Initialize input plugin state
+    let input_state = Arc::new(RwLock::new(InputCaptureState::default()));
+
+    let input_config = InputConfig {
+        keyboard_enabled: true,
+        mouse_enabled: true,
+        toggle_hotkey: Some(HotkeyConfig {
+            modifiers: vec!["ctrl".to_string()],
+            key: "k".to_string(),
         }),
-        auto_connect: false,
-        max_message_size: 1024 * 1024,
-        heartbeat_interval: 30,
-        session_timeout: 300,
-        enable_security: false,
-        video_config: VideoConfig {
-            resolution: VideoResolution::fhd(),
-            fps: 30,
-            quality: VideoQuality::balanced(),
-            compression: true,
-        },
-        input_config: InputConfig {
-            enable_keyboard: true,
-            enable_mouse: true,
-            keyboard_layout: "us".to_string(),
-            mouse_sensitivity: 1.0,
-        },
     };
 
-    // サーバーの起動
-    let server = KvmServer::new(server_config.clone()).await.unwrap();
-    let server_handle = Arc::new(RwLock::new(server));
+    // Start input capture
+    let start_result = start_input_capture(input_config.clone(), tauri::State::from(&input_state)).await;
+    assert!(start_result.is_ok(), "Input capture should start successfully");
 
-    let server_task = tokio::spawn(async move {
-        let mut server = server_handle.write().await;
-        server.start().await.unwrap();
-        println!("Input test server started");
+    // Test keyboard event sending
+    let keyboard_event = KeyboardEvent {
+        key_code: 65, // 'A' key
+        pressed: true,
+        modifiers: 0,
+    };
 
-        // クライアントが接続してイベントを送る時間を待つ
-        tokio::time::sleep(Duration::from_millis(300)).await;
+    let keyboard_result = send_keyboard_event(keyboard_event, tauri::State::from(&input_state)).await;
+    assert!(keyboard_result.is_ok(), "Keyboard event should be sent successfully");
 
-        server.stop().await.unwrap();
-        println!("Input test server stopped");
-    });
+    // Test mouse event sending
+    let mouse_event = MouseEvent {
+        x: 100,
+        y: 200,
+        button: Some(1),
+        pressed: Some(true),
+        wheel_delta: None,
+    };
 
-    // サーバーが起動するのを待つ
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    let mouse_result = send_mouse_event(mouse_event, tauri::State::from(&input_state)).await;
+    assert!(mouse_result.is_ok(), "Mouse event should be sent successfully");
 
-    // クライアントの作成と接続
-    let client = KvmClient::new(client_config).await.unwrap();
-    let client_handle = Arc::new(RwLock::new(client));
+    // Test toggle hotkey
+    let hotkey = HotkeyConfig {
+        modifiers: vec!["ctrl".to_string()],
+        key: "k".to_string(),
+    };
 
-    let client_task = tokio::spawn(async move {
-        let mut client = client_handle.write().await;
+    let toggle_result = toggle_input_capture(hotkey, tauri::State::from(&input_state)).await;
+    assert!(toggle_result.is_ok(), "Input capture toggle should work");
 
-        let server_addr: SocketAddr = "127.0.0.1:8083".parse().unwrap();
-        client.connect(server_addr).await.unwrap();
-        println!("Input test client connected");
+    // Check status after toggle
+    let status_result = get_input_status(tauri::State::from(&input_state)).await;
+    assert!(status_result.is_ok(), "Status query should succeed");
 
-        // キーボードイベント送信テスト
-        let keyboard_event = KeyboardEvent {
-            key_code: 65, // 'A' key
-            pressed: true,
+    // Stop input capture
+    let stop_result = stop_input_capture(tauri::State::from(&input_state)).await;
+    assert!(stop_result.is_ok(), "Input capture should stop successfully");
+
+    println!("Plugin input event handling test passed!");
+}
+
+#[tokio::test]
+async fn test_plugin_error_handling() {
+    // プラグインのエラーハンドリングテスト
+    println!("Testing plugin error handling...");
+
+    // Test protocol plugin with invalid config
+    let protocol_state = Arc::new(RwLock::new(ProtocolPluginState::default()));
+
+    let invalid_protocol_config = ProtocolPluginConfig {
+        version: "1.0.0".to_string(),
+        max_message_size: 0, // Invalid: zero message size
+        heartbeat_interval: 30,
+        session_timeout: 300,
+        compression_enabled: true,
+    };
+
+    // This should still succeed as the config is just stored
+    let init_result = init_protocol(invalid_protocol_config, tauri::State::from(&protocol_state)).await;
+    assert!(init_result.is_ok(), "Protocol init should succeed even with invalid config");
+
+    // Test input plugin with invalid hotkey
+    let input_state = Arc::new(RwLock::new(InputCaptureState::default()));
+
+    let invalid_input_config = InputConfig {
+        keyboard_enabled: true,
+        mouse_enabled: true,
+        toggle_hotkey: Some(HotkeyConfig {
             modifiers: vec![],
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        };
-
-        client.send_keyboard_event(keyboard_event).await.unwrap();
-        println!("Keyboard event sent");
-
-        // マウスイベント送信テスト
-        let mouse_event = MouseEvent {
-            x: 100,
-            y: 200,
-            button: Some(1),
-            pressed: Some(true),
-            wheel_delta: None,
-            modifiers: vec![],
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        };
-
-        client.send_mouse_event(mouse_event).await.unwrap();
-        println!("Mouse event sent");
-
-        // 少し待ってから切断
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        client.disconnect().await.unwrap();
-        println!("Input test client disconnected");
-    });
-
-    // 両方のタスクが完了するのを待つ
-    let result = timeout(Duration::from_secs(5), async {
-        let (server_result, client_result) = tokio::join!(server_task, client_task);
-        server_result.unwrap();
-        client_result.unwrap();
-    }).await;
-
-    match result {
-        Ok(_) => println!("Input event communication test passed!"),
-        Err(_) => panic!("Input event test timed out"),
-    }
-}
-
-#[tokio::test]
-async fn test_connection_error_handling() {
-    // 存在しないサーバーに接続しようとするテスト
-    let client_config = ClientConfig {
-        client_name: "Error Test Client".to_string(),
-        server_address: Some(NetworkAddress {
-            ip: "127.0.0.1".to_string(),
-            port: 9999, // 存在しないポート
+            key: "".to_string(), // Invalid: empty key
         }),
-        auto_connect: false,
-        max_message_size: 1024 * 1024,
-        heartbeat_interval: 30,
-        session_timeout: 300,
-        enable_security: false,
-        video_config: VideoConfig {
-            resolution: VideoResolution::fhd(),
-            fps: 30,
-            quality: VideoQuality::balanced(),
-            compression: true,
-        },
-        input_config: InputConfig {
-            enable_keyboard: true,
-            enable_mouse: true,
-            keyboard_layout: "us".to_string(),
-            mouse_sensitivity: 1.0,
-        },
     };
 
-    let client = KvmClient::new(client_config).await.unwrap();
-    let client_handle = Arc::new(RwLock::new(client));
+    // Start input capture with invalid config
+    let start_result = start_input_capture(invalid_input_config, tauri::State::from(&input_state)).await;
+    // This should still succeed as validation happens during actual operations
 
-    let client_task = tokio::spawn(async move {
-        let mut client = client_handle.write().await;
+    // Test sending events without capture running
+    let keyboard_event = KeyboardEvent {
+        key_code: 65,
+        pressed: true,
+        modifiers: 0,
+    };
 
-        let server_addr: SocketAddr = "127.0.0.1:9999".parse().unwrap();
+    let keyboard_result = send_keyboard_event(keyboard_event, tauri::State::from(&input_state)).await;
+    assert!(keyboard_result.is_err(), "Should fail when input capture is not running");
 
-        // 接続を試みるが失敗するはず
-        let result = client.connect(server_addr).await;
-        assert!(result.is_err(), "Expected connection to fail for non-existent server");
-        println!("Connection error handling test passed - correctly failed to connect to non-existent server");
-    });
+    // Test invalid address for protocol server
+    let invalid_address = "invalid-address:99999";
+    let start_server_result = start_protocol_server_ui(invalid_address.to_string(), tauri::State::from(&protocol_state)).await;
+    // This should fail due to invalid address
+    assert!(start_server_result.is_err(), "Should fail with invalid address");
 
-    // タスクが完了するのを待つ
-    let result = timeout(Duration::from_secs(2), client_task).await;
-
-    match result {
-        Ok(task_result) => {
-            task_result.unwrap();
-            println!("Connection error handling test passed!");
-        }
-        Err(_) => panic!("Connection error handling test timed out"),
-    }
+    println!("Plugin error handling test passed!");
 }

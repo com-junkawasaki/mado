@@ -15,14 +15,14 @@
 
   // Soft KVM - LAN専用Rust実装 プロセスネットワーク
   // Merkle DAG: 各ノードはハッシュ可能、依存関係はacyclic
-  // 現在のステータス: コア通信機能完成 - 実用的KVMシステムとして使用可能
+    // 現在のステータス: プラグインアーキテクチャ完全移行完了 - Tauri UI統合済み
 
   local process = {
     // 基本メタデータ
     name: "soft-kvm",
     version: "0.1.0",
-    description: "LAN専用・低遅延KVM共有システム - WebSocket over TLS通信実装済み",
-    status: "core-communication-complete",
+    description: "LAN専用・低遅延KVM共有システム - Tauriプラグインアーキテクチャ完全移行完了",
+    status: "plugin-architecture-complete",
     capabilities: [
       "WebSocket over TLS 1.3 セキュア通信",
       "Hello/Auth/Heartbeat メッセージ交換",
