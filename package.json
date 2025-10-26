@@ -1,0 +1,28 @@
+{
+  "name": "@gftdcojp/mado",
+  "version": "0.1.0",
+  "description": "Soft KVM - Low Latency KVM Sharing System",
+  "main": "ui/src-tauri/src/main.rs",
+  "scripts": {
+    "build": "cargo tauri build",
+    "dev": "cargo tauri dev",
+    "test": "cargo test",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:unit": "cargo test --lib",
+    "test:integration": "cargo test --test integration",
+    "lint": "cargo clippy",
+    "format": "cargo fmt"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@tauri-apps/api": "^2.0.0",
+    "electron": "^30.0.0",
+    "playwright": "^1.40.0"
+  },
+  "keywords": ["kvm", "remote", "desktop", "sharing"],
+  "author": "Soft KVM Team",
+  "license": "Apache-2.0"
+}

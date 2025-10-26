@@ -77,6 +77,31 @@ cargo tauri dev
 cargo tauri build
 ```
 
+### テスト
+
+```bash
+# 全テスト実行
+cargo test
+
+# ユニットテストのみ
+cargo test --lib
+
+# 統合テストのみ
+cargo test --test integration
+
+# E2Eテスト実行
+npm run test:e2e
+
+# E2Eテスト（UIモード）
+npm run test:e2e:ui
+
+# E2Eテスト（デバッグモード）
+npm run test:e2e:debug
+
+# E2Eテスト（ブラウザ表示）
+npm run test:e2e:headed
+```
+
 ## 🔧 セットアップ
 
 ### Linux (systemd)
