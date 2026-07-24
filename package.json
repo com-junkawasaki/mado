@@ -19,7 +19,7 @@
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@tauri-apps/api": "^2.0.0",
-    "electron": "^30.0.0",
+    "electron": "^35.7.5",
     "playwright": "^1.40.0"
   },
   "keywords": ["kvm", "remote", "desktop", "sharing"],
